@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text;
 using AsmEditor.Core;
 using AsmEditor.Core.Disenador;
@@ -15,9 +16,15 @@ public class MainForm : Form
     private readonly SplitContainer _outerSplit = new();   // explorador | resto
     private readonly SplitContainer _innerSplit = new();   // pestañas   | salida
 
-    private readonly StatusStrip _statusStrip = new();
-    private readonly ToolStripStatusLabel _statusLabel = new();
-    private readonly ToolStripStatusLabel _caretLabel = new();
+    /// <summary>
+    /// La barra de título propia, con el menú integrado (Etapa 2 de
+    /// PLAN_IDE.md). La ventana conserva el marco nativo: ver la sección
+    /// "Barra de título propia" más abajo.
+    /// </summary>
+    private readonly BarraTitulo _barraTitulo = new();
+
+    /// <summary>La barra de estado, como la de Visual Studio.</summary>
+    private readonly BarraEstado _barraEstado = new();
 
     private readonly OpenDocuments _documents = new();
     private BuildSettings _settings = BuildSettings.Load();
@@ -143,6 +150,11 @@ public class MainForm : Form
         VerificarHerramientasAlIniciar();
 
         AbrirAlIniciar(filesToOpen, splash);
+
+        // ⚠ SIN ARCHIVOS NI PROYECTO nada de lo anterior llama a UpdateTitle, y
+        // la insignia de la barra de título quedaba con el texto de diseño
+        // ("Proyecto"). Se llama una vez al final, pase lo que pase.
+        UpdateTitle();
     }
 
     // ---------------------------------------------------------------
@@ -151,7 +163,10 @@ public class MainForm : Form
 
     private void BuildMenu()
     {
-        var menu = new MenuStrip();
+        // ⚠ EL MENÚ VIVE EN LA BARRA DE TÍTULO, no suelto en el formulario: es
+        // uno solo. Acá se llenan sus ítems, y sigue siendo el MainMenuStrip
+        // (de eso dependen los atajos y el reenvío del diseñador).
+        var menu = _barraTitulo.Menu;
 
         var fileMenu = new ToolStripMenuItem("&Archivo");
         AddItem(fileMenu, "&Nuevo", Keys.Control | Keys.N, (_, _) => NewFile());
@@ -279,7 +294,6 @@ public class MainForm : Form
         menu.Items.Add(helpMenu);
 
         MainMenuStrip = menu;
-        Controls.Add(menu);
     }
 
     /// <summary>Agrega un ítem al menú y lo devuelve, para poder habilitarlo o deshabilitarlo después.</summary>
@@ -347,26 +361,25 @@ public class MainForm : Form
 
         BuildToolbar();
 
-        _statusLabel.Text = "Doble clic en un error del panel de errores para saltar a la línea";
-        _statusLabel.Spring = true;
-        _statusLabel.TextAlign = ContentAlignment.MiddleLeft;
-        _caretLabel.Text = "Ln 1, Col 1";
-        _statusStrip.Items.Add(_statusLabel);
-        _statusStrip.Items.Add(_caretLabel);
+        _barraEstado.Dock = DockStyle.Bottom;
+        _barraEstado.Height = 24;
+        _barraEstado.DiagnosticosPedido += MostrarListaDeErrores;
+        _barraEstado.TargetElegido += ElegirTarget;
+
+        _barraTitulo.Dock = DockStyle.Top;
+        _barraTitulo.Height = 32;
 
         // Orden de z-order de WinForms: con Dock, lo que se agrega DESPUÉS se acomoda
         // primero y queda por encima. El Fill va primero; las barras Top/Bottom
         // después, o el split las tapa y se come la fila de pestañas.
         Controls.Add(_outerSplit);
-        Controls.Add(_statusStrip);
+        Controls.Add(_barraEstado);
 
         if (_toolbar is not null) Controls.Add(_toolbar);
 
-        if (MainMenuStrip is not null)
-        {
-            Controls.Remove(MainMenuStrip);
-            Controls.Add(MainMenuStrip);
-        }
+        // La barra de título ÚLTIMA: así queda arriba de todo, sobre la de
+        // herramientas, en la franja que antes era el título de Windows.
+        Controls.Add(_barraTitulo);
 
         Shown += (_, _) =>
         {
@@ -522,7 +535,171 @@ public class MainForm : Form
         _explorer.MarcarPrincipalPedido += MarcarComoPrincipal;
 
         FormClosing += OnFormClosing;
+
+        Activated += MainForm_Activated;
+        Deactivate += MainForm_Deactivate;
+        Resize += MainForm_Resize;
     }
+
+    // ---------------------------------------------------------------
+    // Barra de título propia
+    //
+    // ⚠ LA VENTANA CONSERVA EL MARCO NATIVO DE WINDOWS. No es una ventana sin
+    // borde: esa perdería la sombra, los bordes invisibles para redimensionar,
+    // Aero Snap, el maximizado que respeta la barra de tareas y Alt+Espacio,
+    // y habría que imitar cada cosa a mano. Acá solo se le dice a Windows que
+    // el área de cliente empieza arriba de todo (WM_NCCALCSIZE), así la franja
+    // del título desaparece y la ocupa _barraTitulo; y se le contesta qué es
+    // cada zona (WM_NCHITTEST). Es la técnica de Windows Terminal.
+    //
+    // Probada en la Etapa 0.2 con diagnostico\prototipos\barra_titulo:
+    // arrastre, bordes, doble clic, maximizado exacto al área de trabajo en
+    // los dos monitores, Snap, Alt+Espacio. Ver PLAN_IDE.md.
+    // ---------------------------------------------------------------
+
+    private const int WM_NCCALCSIZE = 0x0083;
+    private const int WM_NCHITTEST = 0x0084;
+    private const int HTCLIENT = 1;
+    private const int HTCAPTION = 2;
+    private const int HTSYSMENU = 3;
+    private const int HTTOP = 12;
+    private const int HTTOPLEFT = 13;
+    private const int HTTOPRIGHT = 14;
+
+    /// <summary>
+    /// Grosor del marco que calcula Windows, medido en cada WM_NCCALCSIZE (cambia
+    /// con el DPI del monitor). Es el alto de la franja superior para
+    /// redimensionar y lo que hay que correr el cliente al maximizar.
+    /// </summary>
+    private int _grosorMarco = 8;
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+
+        // Obliga a recalcular el marco con nuestro WM_NCCALCSIZE: sin esto la
+        // ventana aparece la primera vez con la franja de título de Windows.
+        SetWindowPos(Handle, IntPtr.Zero, 0, 0, 0, 0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+    }
+
+    protected override void WndProc(ref Message m)
+    {
+        if (m.Msg == WM_NCCALCSIZE && m.WParam != IntPtr.Zero)
+        {
+            CalcularAreaDeCliente(ref m);
+            return;
+        }
+
+        if (m.Msg == WM_NCHITTEST)
+        {
+            base.WndProc(ref m);
+
+            // Los bordes nativos (izquierda, derecha, abajo) ya los resolvió
+            // Windows; acá solo se decide lo que cae dentro del área de cliente.
+            if ((int)m.Result == HTCLIENT) m.Result = (IntPtr)QueHayEn(m.LParam);
+            return;
+        }
+
+        base.WndProc(ref m);
+    }
+
+    /// <summary>
+    /// Windows calcula el área de cliente como siempre (con los bordes) y
+    /// después se le devuelve la franja de arriba.
+    /// </summary>
+    private void CalcularAreaDeCliente(ref Message m)
+    {
+        var antes = Marshal.PtrToStructure<NCCALCSIZE_PARAMS>(m.LParam);
+        int arribaOriginal = antes.rgrc0.top;
+        int izquierdaOriginal = antes.rgrc0.left;
+
+        base.WndProc(ref m);
+
+        var p = Marshal.PtrToStructure<NCCALCSIZE_PARAMS>(m.LParam);
+
+        // Lo que Windows descontó a la izquierda es el grosor del marco.
+        _grosorMarco = Math.Max(1, p.rgrc0.left - izquierdaOriginal);
+
+        p.rgrc0.top = arribaOriginal;
+
+        // ⚠ MAXIMIZADA, LA VENTANA SE SALE DE LA PANTALLA por el grosor del
+        // marco en los cuatro lados (Windows lo hace con cualquier ventana).
+        // Los otros tres lados ya vienen descontados; arriba hay que hacerlo a
+        // mano, o la barra de título queda cortada fuera de la pantalla.
+        if (IsZoomed(Handle)) p.rgrc0.top += _grosorMarco;
+
+        Marshal.StructureToPtr(p, m.LParam, false);
+        m.Result = IntPtr.Zero;
+    }
+
+    /// <summary>Qué hay en ese punto de la pantalla, dentro del área de cliente.</summary>
+    private int QueHayEn(IntPtr lParam)
+    {
+        int x = (short)((long)lParam & 0xFFFF);
+        int y = (short)(((long)lParam >> 16) & 0xFFFF);
+        var p = PointToClient(new Point(x, y));
+
+        // La franja de arriba redimensiona, salvo maximizada.
+        if (!IsZoomed(Handle) && p.Y < _grosorMarco)
+        {
+            if (p.X < _grosorMarco * 2) return HTTOPLEFT;
+            if (p.X > ClientSize.Width - _grosorMarco * 2) return HTTOPRIGHT;
+            return HTTOP;
+        }
+
+        if (!_barraTitulo.Bounds.Contains(p)) return HTCLIENT;
+
+        // El logo es el menú de sistema: clic lo abre, doble clic cierra. Lo
+        // hace Windows, como con el ícono de cualquier ventana.
+        var logo = _barraTitulo.AreaLogo;
+        logo.Offset(_barraTitulo.Location);
+        if (logo.Contains(p)) return HTSYSMENU;
+
+        // El resto de la barra (lo que no es menú, buscador, insignia ni
+        // botones: esos contestan por su cuenta) es título.
+        return HTCAPTION;
+    }
+
+    private void MainForm_Activated(object? sender, EventArgs e) => _barraTitulo.Activa = true;
+
+    private void MainForm_Deactivate(object? sender, EventArgs e) => _barraTitulo.Activa = false;
+
+    private void MainForm_Resize(object? sender, EventArgs e) =>
+        _barraTitulo.ActualizarBotonMaximizar(WindowState == FormWindowState.Maximized);
+
+    /// <summary>Ctrl+Q lleva al buscador de comandos de la barra de título, como en Visual Studio.</summary>
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        if (keyData == (Keys.Control | Keys.Q))
+        {
+            _barraTitulo.EnfocarBuscador();
+            return true;
+        }
+
+        return base.ProcessCmdKey(ref msg, keyData);
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RECT { public int left, top, right, bottom; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NCCALCSIZE_PARAMS
+    {
+        public RECT rgrc0, rgrc1, rgrc2;
+        public IntPtr lppos;
+    }
+
+    private const uint SWP_NOSIZE = 0x0001;
+    private const uint SWP_NOMOVE = 0x0002;
+    private const uint SWP_NOZORDER = 0x0004;
+    private const uint SWP_FRAMECHANGED = 0x0020;
+
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
+
+    [DllImport("user32.dll")]
+    private static extern bool IsZoomed(IntPtr hWnd);
 
     private void CycleTab(int delta)
     {
@@ -683,6 +860,15 @@ public class MainForm : Form
         // Por PestanaActiva: con Active, una pestaña de diseñador dejaba el
         // título como si no hubiera nada abierto.
         var doc = PestanaActiva;
+
+        // La insignia de la barra de título: el proyecto, o si no hay, el
+        // archivo activo (con la ruta en el tooltip), como la de Visual Studio.
+        // Text se sigue actualizando aunque no se vea: lo usan la barra de
+        // tareas, Alt+Tab y los diagnósticos.
+        if (_proyecto is not null) _barraTitulo.MostrarInsignia(_proyecto.Nombre, _proyecto.RutaArchivo);
+        else if (doc is not null) _barraTitulo.MostrarInsignia(doc.State.DisplayName, doc.FilePath);
+        else _barraTitulo.MostrarInsignia(null, null);
+
         if (doc is null)
         {
             Text = $"{proyecto}Editor ASM (NASM + GoLink)";
@@ -699,7 +885,7 @@ public class MainForm : Form
         // en blanco, en vez de mostrar una posición inventada.
         var pos = PestanaActiva?.PosicionCursor;
 
-        _caretLabel.Text = pos is null ? "" : $"Ln {pos.Value.Linea}, Col {pos.Value.Columna}";
+        _barraEstado.MostrarPosicion(pos?.Linea, pos?.Columna);
     }
 
     // ---------------------------------------------------------------
@@ -1416,6 +1602,8 @@ public class MainForm : Form
         _parser.Clear();
 
         UpdateBuildUiState();
+        _barraEstado.MostrarDiagnosticos(0, 0);
+        _barraEstado.MostrarCompilando("Compilando...");
         return true;
     }
 
@@ -1438,6 +1626,7 @@ public class MainForm : Form
         if (_stopMenuItem is not null) _stopMenuItem.Enabled = _buildInProgress;
         if (_stopButton is not null) _stopButton.Enabled = _buildInProgress;
         if (_targetCombo is not null) _targetCombo.Enabled = !_buildInProgress;
+        _barraEstado.HabilitarTargets(!_buildInProgress);
 
         // Mientras compila, los comandos de compilar se apagan; al terminar solo
         // vuelven si hay un documento sobre el cual compilar.
@@ -1449,7 +1638,14 @@ public class MainForm : Form
 
     private void UpdateStatusFromDiagnostics()
     {
-        _statusLabel.Text = _errorList.SummaryText;
+        _barraEstado.MostrarResultado(_errorList.ErrorCount, _errorList.WarningCount, _errorList.SummaryText);
+    }
+
+    /// <summary>Clic en los contadores de la barra de estado: la solapa de errores.</summary>
+    private void MostrarListaDeErrores()
+    {
+        // La solapa 0 del panel de abajo es "Errores" (ver BuildLayout).
+        if (_bottomTabs.TabPages.Count > 0) _bottomTabs.SelectedIndex = 0;
     }
 
     /// <summary>Detiene la compilación en curso matando el proceso externo.</summary>
@@ -1465,6 +1661,10 @@ public class MainForm : Form
     {
         _parser.CurrentTool = tool;
         var token = _buildCts?.Token ?? CancellationToken.None;
+
+        _barraEstado.MostrarCompilando(tool is BuildTool.GoLink or BuildTool.MsvcLink
+            ? "Enlazando..."
+            : "Ensamblando...");
 
         var result = await _runner.RunAsync(exePath, arguments, workingDir, token);
         return result.Succeeded;
@@ -1729,12 +1929,43 @@ public class MainForm : Form
                 : $"Targets propios del proyecto '{_proyecto.Nombre}'";
 
         _suppressTargetChange = false;
+
+        ActualizarTargetsEnBarra();
+    }
+
+    /// <summary>
+    /// La barra de estado muestra el target activo y ofrece cambiarlo. La
+    /// lista es la misma que la del combo (la del proyecto, o la general).
+    /// </summary>
+    private void ActualizarTargetsEnBarra()
+    {
+        if (_targetCombo is null) return;
+
+        var lista = _proyecto?.TargetsEfectivos(_settings.Targets) ?? _settings.Targets;
+
+        _barraEstado.MostrarTargets(lista.Select(t => t.Name).ToList(),
+                                    _targetCombo.SelectedIndex,
+                                    _targetCombo.ToolTipText);
+    }
+
+    /// <summary>
+    /// Se eligió un target en la barra de estado. Pasa por el combo a
+    /// propósito: así se guarda donde corresponde (en el proyecto o en la
+    /// configuración general) por el mismo camino de siempre.
+    /// </summary>
+    private void ElegirTarget(int indice)
+    {
+        if (_targetCombo is null || indice < 0 || indice >= _targetCombo.Items.Count) return;
+
+        _targetCombo.SelectedIndex = indice;
     }
 
     private void OnTargetComboChanged()
     {
         if (_suppressTargetChange || _targetCombo is null) return;
         if (_targetCombo.SelectedIndex < 0) return;
+
+        ActualizarTargetsEnBarra();
 
         // Con proyecto, la elección se guarda EN EL PROYECTO: es suya, y
         // escribirla en la configuración general se la impondría a todos los
@@ -2350,9 +2581,8 @@ public class MainForm : Form
 
         if (faltantes.Count > 0)
         {
-            _statusLabel.Text = "Falta: " + string.Join(", ", faltantes) +
-                                "  —  revisá Configuración > Rutas de herramientas";
-            _statusLabel.ForeColor = Tema.Aviso;
+            _barraEstado.MostrarAviso("Falta: " + string.Join(", ", faltantes) +
+                                      "  —  revisá Configuración > Rutas de herramientas");
         }
     }
 
@@ -2593,13 +2823,10 @@ public class MainForm : Form
             _toolbar.Renderer = new RendererBarras();
         }
 
-        // ⚠ EL RENDERER, NO SOLO EL BackColor: el ToolStripRenderer por defecto
-        // pinta su propio fondo encima y la barra queda con el color del sistema.
-        _statusStrip.BackColor = Tema.Superficie2;
-        _statusStrip.ForeColor = Tema.Texto;
-        _statusStrip.Renderer = new RendererBarras();
-        _statusLabel.ForeColor = Tema.Texto2;
-        _caretLabel.ForeColor = Tema.Texto2;
+        // Las barras de título y de estado se pintan solas (escuchan
+        // Tema.TemaCambiado); el menú de targets de la de estado usa el mismo
+        // renderer que el resto, para que se vea igual.
+        _barraEstado.RendererMenus = new RendererBarras();
 
         if (MainMenuStrip is not null)
         {
@@ -2639,7 +2866,6 @@ public class MainForm : Form
         // renderer en un ciclo propio y hay que pedirles el repintado a cada uno.
         MainMenuStrip?.Refresh();
         _toolbar?.Refresh();
-        _statusStrip.Refresh();
 
         Invalidate(true);
         Update();

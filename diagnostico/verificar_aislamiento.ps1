@@ -52,7 +52,8 @@ $scripts = @(
     "compilar_por_interfaz.ps1", "probar_combinaciones.ps1",
     "proyectos\probar_por_interfaz.ps1",
     "rad\abrir_asmform_y_generar.ps1", "rad\disenador_en_pestanas.ps1",
-    "rad\deshacer_en_disenador.ps1"
+    "rad\deshacer_en_disenador.ps1",
+    "probar_barras.ps1"
 )
 
 foreach ($s in $scripts) {

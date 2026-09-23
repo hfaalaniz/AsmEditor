@@ -59,7 +59,7 @@ capturas de Fabián:
 
 ## Etapas
 
-### Etapa 0 · Preparación y pruebas de concepto — *en curso*
+### Etapa 0 · Preparación y pruebas de concepto — *0.1 y 0.2 hechas; 0.3 y 0.4 después de la Etapa 2*
 
 El editor no cambia. Se prueba aparte lo que puede salir caro.
 Los prototipos viven en `diagnostico\prototipos\` (ya excluido del `.csproj`).
@@ -103,15 +103,28 @@ Los prototipos viven en `diagnostico\prototipos\` (ya excluido del `.csproj`).
 - Diagnósticos: el editor aislado arranca en «entorno vacío» (o «último
   proyecto» para `probar_por_interfaz.ps1`); nuevo `ventana_inicio.ps1`.
 
-### Etapa 2 · Barra de título personalizada
+### Etapa 2 · Barras de título y de estado propias (solo `MainForm`) — *adelantada, 23/09/2026*
 
-- `BarraTitulo` + `.Designer.cs`: ícono, **menú integrado**, buscador de
-  comandos del menú, etiqueta con el nombre del proyecto, minimizar /
-  maximizar / cerrar.
-- Mecanismo validado en 0.2. `Form.Text` se sigue actualizando (lo usan la
-  barra de tareas y los diagnósticos).
-- Diagnóstico: arrastre, maximizar/restaurar, Snap, cambio de monitor,
-  capturas en los dos temas.
+Fabián pidió hacerla antes que 0.3, 0.4 y la Etapa 1, con las dos barras
+«con todo lo que deben tener» y solo en `MainForm`.
+
+- **`BarraTitulo` + `.Designer.cs`**: logo (zona HTSYSMENU: clic abre el menú
+  de sistema, doble clic cierra — lo hace Windows), **el menú de siempre
+  mudado a la barra** (uno solo; sigue siendo `MainMenuStrip`), buscador de
+  comandos **Ctrl+Q** (`PopupBusqueda` + `.Designer.cs`, ventana que no se
+  activa; filtro en `Core\FiltroComandos.cs` con pruebas), insignia con el
+  proyecto o el archivo, minimizar / maximizar / cerrar, textos atenuados con
+  la ventana inactiva.
+- **`BarraEstado` + `.Designer.cs`**: estado con ícono («Listo»,
+  «Ensamblando...», «Enlazando...», resultado, aviso de herramientas),
+  **color de acento mientras compila**, contadores de errores y advertencias
+  (clic: lista de errores), Ln/Col, **target activo (clic: menú para
+  cambiarlo, pasa por el combo)**.
+- `MainForm`: manejo de `WM_NCCALCSIZE` / `WM_NCHITTEST` del prototipo 0.2;
+  la barra vieja (`StatusStrip`) y el `MenuStrip` suelto se borraron enteros.
+- Verificación: `diagnostico\probar_barras.ps1` sobre el editor aislado,
+  25/25 (título, maximizado exacto, arrastre, logo, botones, compilar con y
+  sin error, contadores, target, Ctrl+N, buscador, cerrar con confirmación).
 
 ### Etapa 3 · Sistema de acople propio y reescritura de `MainForm`
 
@@ -175,3 +188,20 @@ visual nueva lleva su `.Designer.cs`.
 |---|---|---|---|
 | 23/09/2026 | 0.1 | inicial | Respaldo con git; estado previo a la reforma. |
 | 23/09/2026 | 0.2 | ver log | Prototipo de barra de título propia: 15/15 en los dos monitores. |
+| 23/09/2026 | 2 | ver log | Barras de título y de estado en `MainForm`. `probar_barras.ps1` 25/25, verificada rompiéndola; 409 pruebas unitarias (15 nuevas, verificadas rompiéndolas). Pendiente: proteger el foco en los diagnósticos viejos (ver abajo). |
+
+### Pendientes detectados en la Etapa 2 (no tocados)
+
+- **Diagnósticos viejos sin protección de primer plano**: `humo_funciones`,
+  `rad\disenador_en_pestanas`, `proyectos\probar_por_interfaz` y
+  `rad\deshacer_en_disenador` mandan teclas sin verificar que el editor esté
+  al frente. Con otras ventanas en uso fallan (y las teclas pueden ir a otra
+  ventana). Solos, con el escritorio libre, pasan.
+- **Cerrar la pestaña activa salta a la primera, no a la vecina** (defecto
+  previo): `CloseTabAt` quita la pestaña del control antes que de
+  `_documents`; el control selecciona la 0 y `OnTabChanged` fija el activo
+  en 0 antes de `_documents.RemoveAt`.
+- **El título siempre dice «(NASM + GoLink)»** aunque el target sea MSVC o
+  MASM (texto fijo en `UpdateTitle`, previo).
+- **«Sin errores» con ✓ aunque la compilación se cancele o falle sin
+  diagnósticos** (el resumen ya decía «Sin errores» antes; ahora se ve más).

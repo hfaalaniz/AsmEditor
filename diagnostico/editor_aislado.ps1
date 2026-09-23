@@ -105,8 +105,16 @@ function PrepararEditorAislado([switch]$ConservarTargetActivo) {
 # si esta abierto, no aparece aca.
 function EditoresAislados {
     $carpeta = Join-Path (Split-Path -Parent $PSCommandPath) "editor_aislado"
-    Get-Process AsmEditor -ErrorAction SilentlyContinue |
-        Where-Object { $_.Path -and $_.Path.StartsWith($carpeta, [StringComparison]::OrdinalIgnoreCase) }
+
+    # ⚠ LA RUTA SE LEE UNA SOLA VEZ Y CON try. Process.Path se calcula en cada
+    # lectura: si el proceso termina entre dos lecturas, la segunda da null y
+    # "$_.Path -and $_.Path.StartsWith(...)" revienta. Paso el 23/09 al final de
+    # probar_combinaciones.ps1, con un editor que se estaba cerrando.
+    foreach ($proc in @(Get-Process AsmEditor -ErrorAction SilentlyContinue)) {
+        $ruta = $null
+        try { $ruta = $proc.Path } catch { }
+        if ($ruta -and $ruta.StartsWith($carpeta, [StringComparison]::OrdinalIgnoreCase)) { $proc }
+    }
 }
 
 # Cierra el editor aislado y espera a que muera de verdad.
