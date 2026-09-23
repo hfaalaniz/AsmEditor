@@ -94,9 +94,24 @@ Los prototipos viven en `diagnostico\prototipos\` (ya excluido del `.csproj`).
   su salida cuando el programa termina**: hay que vigilar el proceso y
   cerrarla, o el lector espera para siempre.
   Pendiente: probar el teclado en la ventana a mano (Fabián).
-- [ ] **0.4 Acople propio:** prueba mínima de las dos partes difíciles:
-  **sacar un panel a una ventana flotante** arrastrando su título, y
-  **volver a acoplarlo con guías** y vista previa.
+- [x] **0.4 Acople propio** *(23/09/2026, verde)*. Prototipo en
+  `diagnostico\prototipos\acople\` (`AnfitrionAcople`, `VentanaHerramienta`,
+  `VentanaFlotante`, `GuiasAcople`, `VistaPreviaAcople`, `FormPrueba`, todos
+  con `Designer.cs`; geometría en `GeometriaAcople`). Técnica: al sacar el
+  panel, la flotante aparece bajo el ratón y **el arrastre se le entrega a
+  Windows** (`WM_NCLBUTTONDOWN` + `HTCAPTION`); `WM_MOVING` muestra guías y
+  vista previa, `WM_EXITSIZEMOVE` decide si acopla. Guías y vista previa son
+  ventanas que no se activan ni reciben el ratón.
+  Medido: `PruebaAcople.exe --prueba` (geometría y modelo, sin ratón) 17/17;
+  `probar_acople.ps1` (arrastre real, con clics protegidos) 8/8: sacar a
+  flotante, guías, vista previa, volver a acoplar, y afuera/adentro en un
+  solo arrastre.
+  ⚠ Excepción a la regla del diseñador: el anfitrión usa `Dock` en zonas y
+  `Splitter` (sin Dock un Splitter no funciona). Es el único lugar.
+  Para la versión real (3a–3f): la vista previa tiene que salir de la
+  disposición real (abajo queda ENTRE izquierda y derecha, no a todo el
+  ancho); la flotante necesita barra propia con el tema; zonas con pestañas
+  (3b) y auto-ocultar (3c) no se probaron acá.
 - [ ] **Entrega:** informe de cada prueba y decisiones de Fabián.
 
 ### Etapa 1 · Ventana de inicio

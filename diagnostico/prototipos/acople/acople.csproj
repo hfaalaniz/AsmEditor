@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Prototipo de la Etapa 0.4 (PLAN_IDE.md): acople propio de paneles
+    (flotar y volver a acoplar con guias). Prueba de concepto aparte.
+
+    OutputType Exe para que el modo de prueba sin ventana escriba en la
+    consola; en modo ventana la consola se suelta al arrancar.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>PruebaAcople</RootNamespace>
+    <AssemblyName>PruebaAcople</AssemblyName>
+  </PropertyGroup>
+
+</Project>
