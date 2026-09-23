@@ -66,11 +66,20 @@ Los prototipos viven en `diagnostico\prototipos\` (ya excluido del `.csproj`).
 
 - [x] **0.1 Respaldo:** `git init`, `.gitignore`, `.gitattributes` (sin
   conversión de fin de línea) y commit inicial. *(23/09/2026)*
-- [ ] **0.2 Barra de título propia:** ventana sin borde de Windows con barra
-  dibujada; interceptando `WM_NCHITTEST` para que arrastre, bordes, Aero Snap
-  y maximizado los siga haciendo Windows. Verificar en los dos monitores
-  (1366×768 y 1600×900): arrastre, redimensión, Snap, maximizar sin tapar la
-  barra de tareas, doble clic, Alt+Espacio, paso entre monitores.
+- [x] **0.2 Barra de título propia** *(23/09/2026, verde)*. Técnica de Windows
+  Terminal: se CONSERVA el marco nativo y solo se quita la franja del título
+  (`WM_NCCALCSIZE`); la barra contesta `HTTRANSPARENT` y el formulario decide
+  título / borde superior (`WM_NCHITTEST`). Prototipo en
+  `diagnostico\prototipos\barra_titulo\`, con `Designer.cs`. Medido con
+  `probar_barra_titulo.ps1`, 15/15: sin franja nativa, arrastre, borde
+  derecho (nativo) y superior (nuestro), doble clic, maximizar exacto al área
+  de trabajo en los dos monitores, botones, Aero Snap, paso entre monitores,
+  Alt+Espacio, cerrar. Capturas sin franja blanca.
+  ⚠ Lecciones: las pruebas por interfaz tienen que verificar que el punto es
+  de la ventana antes de hacer clic (la primera corrida le hizo clic a Chrome);
+  en PowerShell, dentro de `@( )` la coma pesa más que la suma.
+  Pendiente de estilo para la Etapa 2: la barra necesita un tono distinto al
+  del contenido.
 - [ ] **0.3 Terminal:** prueba mínima con **ConPTY** (la consola real de
   Windows) contra la alternativa por redirección. Se decide cuál se usa.
 - [ ] **0.4 Acople propio:** prueba mínima de las dos partes difíciles:
@@ -165,3 +174,4 @@ visual nueva lleva su `.Designer.cs`.
 | Fecha | Etapa | Commit | Nota |
 |---|---|---|---|
 | 23/09/2026 | 0.1 | inicial | Respaldo con git; estado previo a la reforma. |
+| 23/09/2026 | 0.2 | ver log | Prototipo de barra de título propia: 15/15 en los dos monitores. |

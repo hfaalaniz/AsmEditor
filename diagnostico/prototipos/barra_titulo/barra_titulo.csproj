@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Prototipo de la Etapa 0.2 (PLAN_IDE.md): barra de titulo propia.
+    Es una prueba de concepto aparte; el editor no la referencia.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>PruebaBarraTitulo</RootNamespace>
+    <AssemblyName>PruebaBarraTitulo</AssemblyName>
+  </PropertyGroup>
+
+</Project>
