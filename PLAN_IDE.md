@@ -80,8 +80,20 @@ Los prototipos viven en `diagnostico\prototipos\` (ya excluido del `.csproj`).
   en PowerShell, dentro de `@( )` la coma pesa más que la suma.
   Pendiente de estilo para la Etapa 2: la barra necesita un tono distinto al
   del contenido.
-- [ ] **0.3 Terminal:** prueba mínima con **ConPTY** (la consola real de
-  Windows) contra la alternativa por redirección. Se decide cuál se usa.
+- [x] **0.3 Terminal** *(23/09/2026, verde)*: **ConPTY**. Prototipo en
+  `diagnostico\prototipos\terminal\` (`SesionConPty`, `InterpreteVT`,
+  `PantallaTerminal`, `ControlTerminal` y `FormTerminal` con `Designer.cs`).
+  `PruebaTerminal.exe --prueba` mide SIN VENTANA (no toca ratón ni teclado):
+  prompt en ~300 ms, eco, colores (91/92), `nasm -v` por el PATH, Read-Host,
+  Ctrl+C corta `ping -t`, cambio de tamaño (80 columnas), salida con código 7
+  — 12/12, y la de colores verificada rompiéndola. La redirección, en cambio:
+  sin prompt, sin colores, sin Ctrl+C ni cambio de tamaño.
+  ⚠ Dos hallazgos que el editor tiene que respetar: (1) `STARTF_USESTDHANDLES`
+  con manejadores nulos, o si nuestra salida está redirigida el programa
+  escribe ahí y la terminal queda en blanco; (2) **la pseudoconsola no cierra
+  su salida cuando el programa termina**: hay que vigilar el proceso y
+  cerrarla, o el lector espera para siempre.
+  Pendiente: probar el teclado en la ventana a mano (Fabián).
 - [ ] **0.4 Acople propio:** prueba mínima de las dos partes difíciles:
   **sacar un panel a una ventana flotante** arrastrando su título, y
   **volver a acoplarlo con guías** y vista previa.

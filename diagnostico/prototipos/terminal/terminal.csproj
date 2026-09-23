@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Prototipo de la Etapa 0.3 (PLAN_IDE.md): terminal integrada con ConPTY.
+    Es una prueba de concepto aparte; el editor no la referencia.
+
+    OutputType Exe (no WinExe) a proposito: el modo "prueba_sin_ventana" escribe
+    sus resultados en la consola. En modo ventana la consola se suelta al
+    arrancar (FreeConsole).
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>PruebaTerminal</RootNamespace>
+    <AssemblyName>PruebaTerminal</AssemblyName>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+</Project>
