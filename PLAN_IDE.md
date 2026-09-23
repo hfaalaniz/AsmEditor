@@ -11,6 +11,33 @@ al terminarla, con la fecha y el commit.
 
 ---
 
+## ▶ PRÓXIMOS PASOS, EN ORDEN (al cierre del 23/09/2026)
+
+Hecho: 0.1, 0.2, 0.3, 0.4 y la Etapa 2 (barras). Lo que sigue:
+
+1. **Confirmar las decisiones con un «sí» (Fabián)**. Si no dice otra cosa,
+   se toman las recomendadas:
+   - Terminal con **ConPTY** → recomendado: sí.
+   - **`Dock` en el anfitrión de acople** (única excepción a la regla del
+     diseñador) → recomendado: sí.
+   - **Proteger los diagnósticos viejos** (`humo_funciones`,
+     `rad\disenador_en_pestanas`, `proyectos\probar_por_interfaz`,
+     `rad\deshacer_en_disenador`): no mandar teclas sin el editor al frente
+     ni hacer clic en ventanas ajenas → recomendado: sí, antes de la Etapa 1.
+2. **Etapa 1 · Ventana de inicio.**
+3. **Etapa 3 · Acople real y reescritura de `MainForm`** (3a → 3g).
+4. **Etapa 4 · Explorador estilo VS.**
+5. **Etapa 5 · Barra de navegación.**
+6. **Etapa 6 · Terminal integrada** (sobre el prototipo 0.3).
+7. **Etapa 7 · Cierre.**
+
+Aparte, para cuando Fabián quiera: probar a mano el teclado de la terminal
+(`diagnostico\prototipos\terminal\...\PruebaTerminal.exe`) y el acople
+(`diagnostico\prototipos\acople\...\PruebaAcople.exe`), y decidir si se
+arreglan los defectos previos anotados al final de este archivo.
+
+---
+
 ## Qué se quiere
 
 Llevar el Editor ASM a la estructura de Visual Studio 2026, a partir de dos
