@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>AsmEditor</AssemblyName>
+    <RootNamespace>AsmEditor</RootNamespace>
+
+    <!--
+      El ícono queda EMBEBIDO EN EL .exe, no solo asignado en tiempo de
+      ejecución: así el Explorador lo muestra sin que el programa corra.
+      Se genera desde recursos/logo.svg — ver recursos/LEEME.md.
+    -->
+    <ApplicationIcon>recursos\AsmEditor.ico</ApplicationIcon>
+
+    <!--
+      ⚠ ESTA VERSIÓN Y LA DE Version.cs TIENEN QUE COINCIDIR. Son dos archivos
+      en dos formatos y ninguno lee al otro: esta es la que ve el Explorador en
+      las propiedades del .exe, la otra es la que se muestra en el splash.
+    -->
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+
+    <AssemblyTitle>Editor ASM</AssemblyTitle>
+    <Product>Editor ASM</Product>
+    <Description>Entorno de desarrollo para ensamblador x86/x64 — NASM, GoLink y MSVC link</Description>
+    <Company>Fabián Alaniz</Company>
+    <Authors>Fabián Alaniz</Authors>
+    <Copyright>© 2026 Fabián Alaniz</Copyright>
+  </PropertyGroup>
+
+  <!--
+    El proyecto de pruebas vive en una subcarpeta: hay que sacarlo del barrido
+    automático de archivos del SDK, o el editor intentaría compilar los tests.
+  -->
+  <ItemGroup>
+    <Compile Remove="AsmEditor.Tests\**" />
+    <EmbeddedResource Remove="AsmEditor.Tests\**" />
+    <None Remove="AsmEditor.Tests\**" />
+  </ItemGroup>
+
+  <!--
+    Lo mismo con diagnostico\: ahí viven herramientas sueltas (por ejemplo
+    generarform, que arma formularios de prueba). Cada una es su propio
+    proyecto, y sin esta exclusión el editor intentaría compilar sus fuentes y
+    su carpeta obj\, que choca con la propia.
+  -->
+  <ItemGroup>
+    <Compile Remove="diagnostico\**" />
+    <EmbeddedResource Remove="diagnostico\**" />
+    <None Remove="diagnostico\**" />
+  </ItemGroup>
+
+</Project>

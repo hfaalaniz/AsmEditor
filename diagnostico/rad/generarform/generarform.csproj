@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Herramienta de diagnóstico: arma un formulario con el modelo del diseñador
+    y escribe los archivos generados, para poder ensamblarlos y ejecutarlos de
+    verdad desde un script.
+
+    Es una consola aparte porque Windows PowerShell 5.1 corre sobre .NET
+    Framework y no puede cargar un ensamblado de .NET 8 con Add-Type.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>generarform</AssemblyName>
+    <RootNamespace>GenerarForm</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Igual que en las pruebas: se compilan las clases de Core directamente. -->
+  <ItemGroup>
+    <Compile Include="..\..\..\Core\*.cs" LinkBase="Core" />
+    <Compile Include="..\..\..\Core\Disenador\*.cs" LinkBase="Core\Disenador" />
+  </ItemGroup>
+
+</Project>

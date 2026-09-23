@@ -1,0 +1,26 @@
+# ── Compilados de .NET ─────────────────────────────────────────────────────
+bin/
+obj/
+.vs/
+*.user
+
+# ── Diagnósticos: lo que se GENERA al correrlos ────────────────────────────
+# Los scripts (.ps1) y los fuentes de referencia (.asm) sí van al repositorio;
+# esto es lo que cada corrida vuelve a crear.
+
+# Copias del editor que arman los diagnósticos (editor_aislado.ps1)
+diagnostico/editor_aislado/
+diagnostico/senuelo_editor/
+
+# Carpetas de trabajo: copias de fuentes, proyectos y formularios de prueba
+diagnostico/banco_fuentes/
+diagnostico/**/banco_*/
+diagnostico/rad/generado/
+
+# Salidas: capturas, registros, binarios producidos por las pruebas
+diagnostico/**/*.png
+diagnostico/**/*.txt
+diagnostico/**/*.exe
+diagnostico/**/*.obj
+diagnostico/**/*.dll
+diagnostico/**/*.pdb

@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <!--
+    Las clases de Core/ no dependen de WinForms, así que se compilan directamente acá.
+    Referenciar AsmEditor.csproj (net8.0-windows) arrastraría WinForms a las pruebas.
+  -->
+  <ItemGroup>
+    <Compile Include="..\Core\*.cs" LinkBase="Core" />
+    <Compile Include="..\Core\Disenador\*.cs" LinkBase="Core\Disenador" />
+    <Compile Include="..\Core\Proyecto\*.cs" LinkBase="Core\Proyecto" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.0" />
+
+    <!--
+      Permite saltear una prueba en tiempo de ejecución (Skip.If). Lo usan las
+      pruebas que invocan nasm.exe: si la herramienta no está, la prueba se
+      saltea en vez de fallar por el entorno.
+    -->
+    <PackageReference Include="Xunit.SkippableFact" Version="1.4.13" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="xunit" Version="2.5.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

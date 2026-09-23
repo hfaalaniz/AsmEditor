@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ===========================================================================
+  LOGO DEL EDITOR ASM  ·  variante para tamaños chicos (menos de 32 px)
+  ===========================================================================
+
+  La misma marca sin patas ni bits, y con la «A» más grande y más gruesa.
+
+  ⚠ NO ES UN CAPRICHO: a 16-24 px las patas de 1,6 px de ancho se funden con
+    el borde del chip y los bits de 2 px quedan en una mancha de píxel y medio.
+    El dibujo completo a ese tamaño se ve sucio, no detallado. Comprobado
+    mirando la hoja de prueba (`diagnostico/logo_prueba.png`), no estimado.
+
+  El umbral está en `LogoEditor.RenderizarPng`: detalle a partir de 32 px.
+
+  Equivale a `LogoEditor.Dibujar(..., detalle: false)`.
+  Mismas advertencias que `logo.svg`: si se toca uno, tocar el otro.
+
+  GRILLA: 32 × 32.
+-->
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="64" height="64" viewBox="0 0 32 32"
+     shape-rendering="geometricPrecision">
+
+  <title>Editor ASM (chico)</title>
+  <desc>Variante simplificada de la marca para íconos de menos de 32 píxeles.</desc>
+
+  <!-- Cuerpo del chip: igual que en la versión completa -->
+  <rect x="6" y="6" width="20" height="20" rx="3" ry="3"
+        fill="#D4A017" fill-opacity="0.11"
+        stroke="#D4A017" stroke-width="2" stroke-linejoin="round"/>
+
+  <!-- La «A», centrada y engordada: a este tamaño es lo único que se distingue.
+       GDI+ (sin detalle): (11.8,21.5) (16,10.5) (20.2,21.5)
+                 travesaño (13.6,17.4) → (18.4,17.4)  con trazo 2.8 -->
+  <g stroke="#D4A017" fill="none" stroke-width="2.8"
+     stroke-linecap="round" stroke-linejoin="miter">
+    <polyline points="11.8,21.5 16,10.5 20.2,21.5"/>
+    <line x1="13.6" y1="17.4" x2="18.4" y2="17.4"/>
+  </g>
+</svg>

@@ -1,0 +1,5 @@
+# Git guarda y devuelve cada archivo EXACTAMENTE como esta, sin convertir los
+# saltos de linea. La configuracion global tiene core.autocrlf=true, que
+# pasaria los fuentes (LF) a CRLF al restaurarlos: un "git restore" dejaria
+# los archivos distintos de como estaban.
+* -text
