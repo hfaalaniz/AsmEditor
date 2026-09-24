@@ -270,7 +270,7 @@ public class MainForm : Form
             (_, _) => MostrarDisenador());
 
         var configMenu = new ToolStripMenuItem("&Configuración");
-        AddItem(configMenu, "&Rutas de herramientas...", Keys.None, (_, _) => ShowSettings());
+        AddItem(configMenu, "&Opciones...", Keys.None, (_, _) => MostrarOpciones());
         AddItem(configMenu, "&Verificar herramientas", Keys.None, (_, _) => CheckTools());
 
         var helpMenu = new ToolStripMenuItem("A&yuda");
@@ -2484,16 +2484,31 @@ public class MainForm : Form
     // Configuración
     // ---------------------------------------------------------------
 
-    private void ShowSettings()
+    /// <summary>
+    /// Configuración → Opciones. La ventana edita una copia de los valores; se
+    /// aplican solo al aceptar (ver ValoresOpciones: el Clone de la
+    /// configuración comparte Ui y no servía para esto).
+    /// </summary>
+    private void MostrarOpciones()
     {
-        using var form = new SettingsForm(_settings);
-        if (form.ShowDialog(this) == DialogResult.OK)
-        {
-            _settings = form.Settings;
-            _settings.Save();
-            _explorer.SetRoot(SafeProjectFolder());
-            ReloadTargetCombo();
-        }
+        using var form = new FormOpciones(ValoresOpciones.Leer(_settings.Config));
+        if (form.ShowDialog(this) != DialogResult.OK) return;
+
+        var temaAntes = Ui.Theme;
+
+        form.Valores.Aplicar(_settings.Config);
+        _settings.Save();
+
+        // El tema se aplica en el momento, como desde Ver → Tema.
+        if (Ui.Theme != temaAntes)
+            CambiarTema(Ui.Theme == ModoTemaGuardado.Claro ? ModoTema.Claro : ModoTema.Oscuro);
+
+        // La carpeta de trabajo pudo cambiar. Con un proyecto abierto el
+        // explorador sigue mostrando el proyecto: SetRoot lo descartaría (y
+        // antes, al guardar «Rutas de herramientas», lo hacía).
+        if (_proyecto is null) _explorer.SetRoot(SafeProjectFolder());
+
+        ReloadTargetCombo();
     }
 
     private void CheckTools()

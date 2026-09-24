@@ -131,7 +131,7 @@ public static class ToolReport
                 sb.AppendLine($"Hay {rutas.SdksDisponibles} versiones del SDK de Windows.");
             }
 
-            sb.AppendLine("Se eligen en Configuración > Rutas de herramientas.");
+            sb.AppendLine("Se eligen en Configuración > Opciones > Herramientas > MSVC.");
         }
 
         return sb.ToString();

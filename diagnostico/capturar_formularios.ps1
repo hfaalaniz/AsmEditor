@@ -46,7 +46,9 @@ ApplicationConfiguration.Initialize();
 
 var settings = BuildSettings.Load();
 
-Capturar(new SettingsForm(settings), Path.Combine(salida, "form_configuracion.png"));
+// Solo la primera pagina: las demas se eligen en el arbol, y la captura de
+// cada una (real, con PrintWindow) la saca opciones.ps1.
+Capturar(new FormOpciones(ValoresOpciones.Leer(settings.Config)), Path.Combine(salida, "form_opciones.png"));
 Capturar(new TargetEditorForm(settings), Path.Combine(salida, "form_targets.png"));
 
 Console.WriteLine("listo");

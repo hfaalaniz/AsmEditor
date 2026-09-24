@@ -39,7 +39,7 @@ public class BuildRunner
         if (!File.Exists(exePath))
         {
             var msg = $"ERROR: no se encontró el ejecutable en '{exePath}'. " +
-                      $"Revisá Configuración > Rutas de herramientas.";
+                      $"Revisá Configuración > Opciones > Herramientas.";
             OutputReceived?.Invoke(msg + Environment.NewLine);
             LineReceived?.Invoke(msg);
             return new RunResult(RunOutcome.Failed, -1);

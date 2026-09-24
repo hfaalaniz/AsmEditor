@@ -34,7 +34,8 @@ Al abrir por primera vez, el editor ya viene apuntando a:
 - Librerías por defecto: `kernel32.dll user32.dll gdi32.dll`
 - Punto de entrada: `main`
 
-Si tus rutas son distintas, andá a **Configuración → Rutas de herramientas...**
+Si tus rutas son distintas, andá a **Configuración → Opciones...**, categoría
+**Herramientas** (NASM y GoLink, MSVC).
 Los cambios se guardan en `settings.json`, junto al `.exe` del editor.
 
 Usá **Configuración → Verificar herramientas** para confirmar que NASM y

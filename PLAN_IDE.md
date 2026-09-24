@@ -29,7 +29,7 @@ Hecho: 0.1, 0.2, 0.3, 0.4 y la Etapa 2 (barras). Lo que sigue:
      `rad\deshacer_en_disenador`): no mandar teclas sin el editor al frente
      ni hacer clic en ventanas ajenas → recomendado: sí, antes de la Etapa 1.
 2. ✅ **Etapa 1 · Ventana de inicio** *(23/09; ver su sección y el registro)*.
-   Queda abierta una sola cosa: dónde se elige «Al iniciar» (ver la Etapa 1).
+   «Al iniciar» se elige en la nueva ventana **Configuración → Opciones**.
 3. **Etapa 3 · Acople real y reescritura de `MainForm`** (3a → 3g).
 4. **Etapa 4 · Explorador estilo VS.**
 5. **Etapa 5 · Barra de navegación.**
@@ -180,12 +180,37 @@ Los prototipos viven en `diagnostico\prototipos\` (ya excluido del `.csproj`).
   como hacía el editor antes. Si se salió sin proyecto, arranca vacío. (VS
   usa, en cambio, el primero de los recientes.)
 - «Abrir una carpeta»: el explorador muestra esa carpeta solo en esta sesión.
-- **Pendiente — dónde elegir «Al iniciar»**: hoy solo se cambia en
-  `settings.json`. `SettingsForm` está construido en código, sin
-  `Designer.cs`: agregarle un control rompe la regla del diseñador, y
-  convertirlo es una reescritura aparte. Recomendado: un submenú
-  **Herramientas → Al iniciar** con las tres opciones (el menú ya se arma en
-  código en `BuildMenu`). Espera el OK de Fabián.
+- «Al iniciar» se elige en **Configuración → Opciones → Entorno → General**
+  (ver «Ventana Opciones» abajo).
+
+### Ventana Opciones (23/09/2026, pedido de Fabián)
+
+**Configuración → Opciones...** reemplaza a «Rutas de herramientas...»
+(`SettingsForm`, hecho en código, se reescribió con diseñador y se borró).
+Estilo VS: árbol de categorías a la izquierda, página a la derecha.
+
+| Página | Opciones |
+|---|---|
+| Entorno → General | Tema, Al iniciar |
+| Entorno → Proyectos | Carpeta del proyecto (de trabajo) |
+| Herramientas → NASM y GoLink | Rutas de nasm.exe y GoLink.exe |
+| Herramientas → MSVC | Toolchain 64/32 y SDK 64/32 (lógica de antes, sin cambios) |
+
+- **Agregar una página:** un `UserControl` con `Designer.cs` que implemente
+  `IPaginaOpciones`, arrastrado a `pnlPaginas` en el diseñador. El árbol se
+  arma solo (`Categoria`, `Titulo`, `Orden`); los colores los pone
+  `EstiloOpciones` por tipo de control (etiquetas `lblNota*` en gris).
+- **Agregar una opción:** su propiedad en `Core\ValoresOpciones.cs` + su
+  línea en `Leer` y en `Aplicar` + el control en su página. Si falta una de
+  las dos líneas, `ValoresOpcionesTests.TodaPropiedad_VaYVuelve` falla
+  (reflexión; verificado agregando una opción sin conectar).
+- ⚠ Se edita una **copia** (`ValoresOpciones`), no `BuildConfig.Clone`: el
+  Clone comparte `Ui`, y Cancelar habría cambiado igual el tema y «Al iniciar».
+- **Ver → Tema** sigue como atajo del mismo valor.
+- Defecto previo corregido al reescribir: guardar «Rutas de herramientas» con
+  un proyecto abierto le cambiaba el explorador a la vista de carpeta.
+- Pruebas: `ValoresOpcionesTests` (5), `diagnostico\opciones.ps1` (por
+  interfaz), `romper_valores_opciones.ps1`, `romper_opciones.ps1`.
 
 ### Etapa 2 · Barras de título y de estado propias (solo `MainForm`) — *adelantada, 23/09/2026*
 
@@ -275,6 +300,7 @@ visual nueva lleva su `.Designer.cs`.
 | 23/09/2026 | 2 | ver log | Barras de título y de estado en `MainForm`. `probar_barras.ps1` 25/25, verificada rompiéndola; 409 pruebas unitarias (15 nuevas, verificadas rompiéndolas). Pendiente: proteger el foco en los diagnósticos viejos (ver abajo). |
 | 23/09/2026 | — | ver log | Diagnósticos viejos protegidos (`proteccion_interfaz.ps1`). |
 | 23/09/2026 | 1 | ver log | Ventana de inicio. 426 pruebas unitarias (17 nuevas de `RecientesInicio`, verificadas rompiéndolas). `ventana_inicio.ps1` 8 casos por interfaz, verificada con `romper_ventana_inicio.ps1` (6 defectos). |
+| 23/09/2026 | 1 | ver log | Ventana Configuración → Opciones (reemplaza a «Rutas de herramientas»). 431 pruebas unitarias (5 nuevas, verificadas con `romper_valores_opciones.ps1`, incluida una opción nueva sin conectar). `opciones.ps1` por interfaz, verificada con `romper_opciones.ps1` (6 defectos). `ventana_inicio` y `probar_barras` en verde. |
 
 ### Pendientes detectados en la Etapa 2 (no tocados)
 
