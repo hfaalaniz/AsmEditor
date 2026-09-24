@@ -136,14 +136,9 @@ public class MainForm : Form
         splash?.Informar("Explorando la carpeta del proyecto...");
         _explorer.SetRoot(SafeProjectFolder());
 
-        // El proyecto de la sesión anterior, si sigue estando. Si no, se arranca
-        // sin proyecto, que es un estado perfectamente válido.
-        if (!string.IsNullOrWhiteSpace(Ui.ProyectoAbierto) && File.Exists(Ui.ProyectoAbierto))
-        {
-            splash?.Informar("Abriendo el proyecto...");
-            AbrirProyecto(Ui.ProyectoAbierto);
-        }
-
+        // ⚠ EL PROYECTO YA NO SE REABRE SOLO ACÁ. Qué se abre al arrancar lo
+        // decide la ventana de inicio (o la opción "Al iniciar"), y lo aplica
+        // AplicarInicio cuando la ventana ya está visible. Ver Program.cs.
         ActualizarEstadoDelProyecto();
 
         splash?.Informar("Verificando las herramientas de compilación...");
@@ -539,6 +534,7 @@ public class MainForm : Form
         Activated += MainForm_Activated;
         Deactivate += MainForm_Deactivate;
         Resize += MainForm_Resize;
+        Shown += MainForm_Shown;
     }
 
     // ---------------------------------------------------------------
@@ -2087,6 +2083,13 @@ public class MainForm : Form
     /// <summary>Deja un proyecto como el activo y actualiza todo lo que depende de él.</summary>
     private void UsarProyecto(ProyectoAsm p)
     {
+        // El proyecto que se deja guarda su sesión antes de cambiar.
+        if (_proyecto?.RutaArchivo is { } anterior &&
+            (p.RutaArchivo is null || !PathComparer.SamePath(anterior, p.RutaArchivo)))
+        {
+            GuardarSesionDelProyecto();
+        }
+
         _proyecto = p;
 
         if (p.RutaArchivo is not null)
@@ -2109,6 +2112,7 @@ public class MainForm : Form
         if (_proyecto is null) return;
 
         GuardarProyecto();
+        GuardarSesionDelProyecto();
 
         var nombre = _proyecto.Nombre;
         _proyecto = null;
@@ -2653,11 +2657,15 @@ public class MainForm : Form
         // El proyecto ya se anota al abrirlo y al cerrarlo, pero se confirma acá
         // para que el estado guardado no dependa de que aquello haya pasado.
         Ui.ProyectoAbierto = _proyecto?.RutaArchivo;
+
+        // Y sus archivos abiertos, para reabrirlos cuando se lo elija en la
+        // ventana de inicio.
+        GuardarSesionDelProyecto();
     }
 
     /// <summary>
-    /// Abre lo que corresponda al arrancar: lo de la línea de comandos manda;
-    /// si no, lo que había abierto la sesión anterior.
+    /// Abre los archivos de la línea de comandos. Lo demás que se abre al
+    /// arrancar lo elige la ventana de inicio (AplicarInicio).
     /// </summary>
     private void AbrirAlIniciar(string[]? argumentos, FormSplash? splash = null)
     {
@@ -2688,26 +2696,125 @@ public class MainForm : Form
             }
         }
 
-        if (!abrioAlguno && Ui.RestoreSession)
-        {
-            foreach (var file in Ui.OpenFiles.ToList())
-            {
-                if (!File.Exists(file)) continue;
-                splash?.Informar($"Restaurando {Path.GetFileName(file)}...");
-                OpenPath(file);
-                abrioAlguno = true;
-            }
+        AbrioArchivosDeLineaDeComandos = abrioAlguno;
 
-            if (abrioAlguno && Ui.ActiveFileIndex < _tabs.TabPages.Count)
-            {
-                _tabs.SelectedIndex = Ui.ActiveFileIndex;
-            }
-        }
+        // ⚠ YA NO SE RESTAURA LA LISTA GLOBAL DE ARCHIVOS (Ui.OpenFiles). Sin
+        // archivo por línea de comandos manda la ventana de inicio: el IDE
+        // arranca vacío y los archivos que se reabren son los del PROYECTO que
+        // se elija (Ui.SesionesProyectos, ver AbrirProyectoConSesion).
 
         // Sin nada que abrir se muestra la bienvenida, no un documento forzado:
         // el editor arranca igual que queda al cerrar todas las pestañas.
         ActualizarPantallaVacia();
         if (!abrioAlguno) _bienvenida.CargarRecientes(Ui.RecentFiles);
+    }
+
+    // ---------------------------------------------------------------
+    // Ventana de inicio
+    // ---------------------------------------------------------------
+
+    /// <summary>
+    /// True si el editor se abrió con archivos por línea de comandos (doble
+    /// clic en un .asm): en ese caso no se muestra la ventana de inicio, como
+    /// en Visual Studio.
+    /// </summary>
+    public bool AbrioArchivosDeLineaDeComandos { get; private set; }
+
+    /// <summary>La opción "Al iniciar" guardada.</summary>
+    public AlIniciar ModoAlIniciar => Ui.AlIniciar;
+
+    /// <summary>La ventana de inicio, con los recientes de este editor.</summary>
+    public VentanaInicio CrearVentanaInicio() => new(Ui, _settings.Save, SafeProjectFolder());
+
+    /// <summary>Lo elegido al arrancar, que se aplica cuando la ventana ya se ve.</summary>
+    private EleccionInicio? _eleccionPendiente;
+
+    /// <summary>
+    /// Anota qué abrir al arrancar. Se aplica en Shown y no antes: crear un
+    /// proyecto abre un diálogo, y un diálogo necesita la ventana visible como
+    /// dueña.
+    /// </summary>
+    public void PrepararInicio(EleccionInicio eleccion) => _eleccionPendiente = eleccion;
+
+    private void MainForm_Shown(object? sender, EventArgs e)
+    {
+        if (_eleccionPendiente is not { } eleccion) return;
+        _eleccionPendiente = null;
+        AplicarInicio(eleccion);
+    }
+
+    // Sin la guarda _abriendoAlIniciar: acá todo es una elección explícita del
+    // usuario, como hacerlo desde el menú Archivo. Abrir un .asm suelto que está
+    // en la carpeta de un proyecto ofrece abrir el proyecto, igual que allá.
+    private void AplicarInicio(EleccionInicio eleccion)
+    {
+        switch (eleccion.Accion)
+        {
+            case AccionInicio.AbrirProyecto when eleccion.Ruta is not null:
+                AbrirProyectoConSesion(eleccion.Ruta);
+                break;
+
+            case AccionInicio.UltimoProyecto:
+                if (Ui.ProyectoAbierto is { } ultimo && File.Exists(ultimo)) AbrirProyectoConSesion(ultimo);
+                break;
+
+            case AccionInicio.AbrirCarpeta when eleccion.Ruta is not null:
+                // Como "Abrir una carpeta" de VS: el explorador muestra esa
+                // carpeta. No se guarda como carpeta del editor: es para esta sesión.
+                _explorer.SetRoot(eleccion.Ruta);
+                break;
+
+            case AccionInicio.AbrirArchivo when eleccion.Ruta is not null:
+                if (string.Equals(Path.GetExtension(eleccion.Ruta), ArchivoProyecto.Extension, StringComparison.OrdinalIgnoreCase))
+                    AbrirProyectoConSesion(eleccion.Ruta);
+                else
+                    OpenPath(eleccion.Ruta);
+                break;
+
+            case AccionInicio.CrearProyecto:
+                NuevoProyecto();
+                break;
+
+            // ContinuarSinCodigo: el IDE vacío, con la bienvenida.
+        }
+
+        ActualizarPantallaVacia();
+        UpdateTitle();
+    }
+
+    /// <summary>
+    /// Abre el proyecto y los archivos que tenía abiertos la última vez que se
+    /// cerró (su sesión), con la misma pestaña activa. Los que ya no existen se
+    /// saltean.
+    /// </summary>
+    private void AbrirProyectoConSesion(string ruta)
+    {
+        AbrirProyecto(ruta);
+        if (_proyecto is null) return;
+
+        var sesion = Ui.SesionDe(ruta);
+        if (sesion is null) return;
+
+        foreach (var archivo in sesion.Archivos.Where(File.Exists)) OpenPath(archivo);
+
+        if (sesion.Activo < _tabs.TabPages.Count) _tabs.SelectedIndex = sesion.Activo;
+    }
+
+    /// <summary>
+    /// Anota la sesión del proyecto abierto (qué archivos tiene abiertos). Se
+    /// llama al salir y antes de cambiar o cerrar el proyecto.
+    /// </summary>
+    private void GuardarSesionDelProyecto()
+    {
+        if (_proyecto?.RutaArchivo is not { } ruta) return;
+
+        var archivos = AllDocuments
+            .Select(d => d.FilePath)
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Select(p => p!)
+            .ToList();
+
+        Ui.GuardarSesionDeProyecto(ruta, archivos, Math.Max(0, _tabs.SelectedIndex));
     }
 
     // ---------------------------------------------------------------

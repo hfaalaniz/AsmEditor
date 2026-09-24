@@ -28,7 +28,8 @@ Hecho: 0.1, 0.2, 0.3, 0.4 y la Etapa 2 (barras). Lo que sigue:
      `rad\disenador_en_pestanas`, `proyectos\probar_por_interfaz`,
      `rad\deshacer_en_disenador`): no mandar teclas sin el editor al frente
      ni hacer clic en ventanas ajenas → recomendado: sí, antes de la Etapa 1.
-2. **Etapa 1 · Ventana de inicio.**
+2. ✅ **Etapa 1 · Ventana de inicio** *(23/09; ver su sección y el registro)*.
+   Queda abierta una sola cosa: dónde se elige «Al iniciar» (ver la Etapa 1).
 3. **Etapa 3 · Acople real y reescritura de `MainForm`** (3a → 3g).
 4. **Etapa 4 · Explorador estilo VS.**
 5. **Etapa 5 · Barra de navegación.**
@@ -161,6 +162,31 @@ Los prototipos viven en `diagnostico\prototipos\` (ya excluido del `.csproj`).
 - Diagnósticos: el editor aislado arranca en «entorno vacío» (o «último
   proyecto» para `probar_por_interfaz.ps1`); nuevo `ventana_inicio.ps1`.
 
+**Cómo quedó (23/09/2026):**
+
+- `Program.cs`: splash → (si no vino un archivo por línea de comandos)
+  según `Ui.AlIniciar`: ventana de inicio / último proyecto / nada →
+  `Application.Run(MainForm)`. Cerrar la ventana de inicio (X o Esc) cierra
+  el editor, como VS.
+- `MainForm` ya **no reabre solo** el proyecto anterior ni la lista global
+  `Ui.OpenFiles` (queda en el JSON, sin uso). La elección se guarda con
+  `PrepararInicio` y se aplica en `Shown` (`AplicarInicio`): así el diálogo de
+  «Crear un proyecto» sale con el IDE visible como dueño.
+- **Sesión por proyecto** (`Ui.SesionesProyectos`): archivos abiertos y
+  pestaña activa. Se guarda al salir, al cambiar de proyecto y al cerrarlo;
+  se restaura al abrir el proyecto desde la ventana de inicio o con «último
+  proyecto».
+- «Último proyecto» = el que estaba **abierto al salir** (`Ui.ProyectoAbierto`),
+  como hacía el editor antes. Si se salió sin proyecto, arranca vacío. (VS
+  usa, en cambio, el primero de los recientes.)
+- «Abrir una carpeta»: el explorador muestra esa carpeta solo en esta sesión.
+- **Pendiente — dónde elegir «Al iniciar»**: hoy solo se cambia en
+  `settings.json`. `SettingsForm` está construido en código, sin
+  `Designer.cs`: agregarle un control rompe la regla del diseñador, y
+  convertirlo es una reescritura aparte. Recomendado: un submenú
+  **Herramientas → Al iniciar** con las tres opciones (el menú ya se arma en
+  código en `BuildMenu`). Espera el OK de Fabián.
+
 ### Etapa 2 · Barras de título y de estado propias (solo `MainForm`) — *adelantada, 23/09/2026*
 
 Fabián pidió hacerla antes que 0.3, 0.4 y la Etapa 1, con las dos barras
@@ -247,6 +273,8 @@ visual nueva lleva su `.Designer.cs`.
 | 23/09/2026 | 0.1 | inicial | Respaldo con git; estado previo a la reforma. |
 | 23/09/2026 | 0.2 | ver log | Prototipo de barra de título propia: 15/15 en los dos monitores. |
 | 23/09/2026 | 2 | ver log | Barras de título y de estado en `MainForm`. `probar_barras.ps1` 25/25, verificada rompiéndola; 409 pruebas unitarias (15 nuevas, verificadas rompiéndolas). Pendiente: proteger el foco en los diagnósticos viejos (ver abajo). |
+| 23/09/2026 | — | ver log | Diagnósticos viejos protegidos (`proteccion_interfaz.ps1`). |
+| 23/09/2026 | 1 | ver log | Ventana de inicio. 426 pruebas unitarias (17 nuevas de `RecientesInicio`, verificadas rompiéndolas). `ventana_inicio.ps1` 8 casos por interfaz, verificada con `romper_ventana_inicio.ps1` (6 defectos). |
 
 ### Pendientes detectados en la Etapa 2 (no tocados)
 

@@ -142,6 +142,9 @@ if (Test-Path $settings) {
 
     if ($cfg.Ui) {
         $cfg.Ui | Add-Member -NotePropertyName ProyectoAbierto -NotePropertyValue $rutaProy -Force
+        # AlIniciar = 1 (UltimoProyecto): desde la ventana de inicio el editor
+        # ya no reabre solo el proyecto anterior; este modo es el que lo hace.
+        $cfg.Ui | Add-Member -NotePropertyName AlIniciar -NotePropertyValue 1 -Force
         # Que no reabra archivos de sesiones anteriores y ensucie la prueba.
         $cfg.Ui.OpenFiles = @()
         $cfg | ConvertTo-Json -Depth 12 | Set-Content $settings -Encoding UTF8

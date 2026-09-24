@@ -76,6 +76,17 @@ function PrepararEditorAislado([switch]$ConservarTargetActivo) {
             $cfg.Ui.ActiveFileIndex = 0
             $cfg.Ui.RecentFiles     = @()
             $cfg.Ui.RecentProjects  = @()
+
+            # Las fechas y sesiones son de los proyectos de Fabian: fuera.
+            # Add-Member -Force porque un settings.json anterior a la ventana de
+            # inicio no tiene estas claves.
+            $cfg.Ui | Add-Member -NotePropertyName FechasProyectos -NotePropertyValue ([pscustomobject]@{}) -Force
+            $cfg.Ui | Add-Member -NotePropertyName SesionesProyectos -NotePropertyValue ([pscustomobject]@{}) -Force
+
+            # AlIniciar = 2 (EntornoVacio): sin la ventana de inicio, el IDE
+            # arranca directo, como lo esperan las pruebas por interfaz. La que
+            # prueba la ventana de inicio lo cambia a 0 en su propia copia.
+            $cfg.Ui | Add-Member -NotePropertyName AlIniciar -NotePropertyValue 2 -Force
         }
 
         # La carpeta del explorador (y donde arrancan los dialogos) pasa a ser
