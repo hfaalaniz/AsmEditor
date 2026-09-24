@@ -18,6 +18,7 @@
 # ============================================================================
 
 $ErrorActionPreference = "Stop"
+. "$PSScriptRoot\..\..\proteccion_interfaz.ps1"   # ProteccionUI: nombre del programa en los avisos
 Add-Type -AssemblyName System.Windows.Forms, System.Drawing
 
 Add-Type @"
@@ -94,7 +95,8 @@ function Mal($t)  { Write-Host "  MAL  $t" -ForegroundColor Red; $script:fallas+
 
 function EsDelPrototipo($x, $y) {
     if ([W]::ProcesoEn($x, $y) -eq [uint32]$script:p.Id) { return $true }
-    Mal "el punto ($x,$y) esta tapado por '$([W]::TituloEn($x, $y))': NO se aprieta ni se suelta"
+    # Solo el nombre del programa, nunca el titulo (ver proteccion_interfaz.ps1).
+    Mal "el punto ($x,$y) esta tapado por otro programa ($([ProteccionUI]::Programa([ProteccionUI]::RaizEn($x, $y)))): NO se aprieta ni se suelta"
     return $false
 }
 

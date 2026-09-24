@@ -1,4 +1,4 @@
-# ============================================================================
+﻿# ============================================================================
 # Deshacer y rehacer del DISENADOR, en el editor real.
 #
 # Abre un .asmform con 6 controles y verifica, por la interfaz:
@@ -164,11 +164,25 @@ function Capturar($h, $archivo) {
     $g.Dispose(); $bmp.Dispose()
 }
 
+# Teclas y clics protegidos: solo sobre el editor (ver proteccion_interfaz.ps1;
+# el 23/09 las teclas de esta prueba pudieron ir a otras ventanas).
+. "$PSScriptRoot\..\proteccion_interfaz.ps1"
+
 function Teclas($t) {
-    [void][W]::SetForegroundWindow($script:hMain)
-    Start-Sleep -Milliseconds 300
-    [System.Windows.Forms.SendKeys]::SendWait($t)
-    Start-Sleep -Milliseconds 700
+    [void](TraerAlFrente $script:p $script:hMain)
+    [void](TeclasProtegidas $script:p $t 700)
+}
+
+# Clic, clic con temblor y arrastre, verificando que el punto de apretar es
+# del editor. Durante un arrastre el cursor pasa por otras ventanas sin clic.
+function Tocar($x, $y) { [void](ClicProtegido $script:p $x $y) }
+function TocarConTemblor($x, $y) {
+    if ([ProteccionUI]::ProcesoDe([ProteccionUI]::RaizEn($x, $y)) -ne [uint32]$script:p.Id) { AvisoProteccion "($x,$y) no es del editor: NO se toca"; return }
+    [M]::ClicConTemblor($x, $y)
+}
+function ArrastrarSobreEditor($x1, $y1, $x2, $y2) {
+    if ([ProteccionUI]::ProcesoDe([ProteccionUI]::RaizEn($x1, $y1)) -ne [uint32]$script:p.Id) { AvisoProteccion "($x1,$y1) no es del editor: NO se arrastra"; return }
+    [M]::Arrastrar($x1, $y1, $x2, $y2)
 }
 
 # ⚠ NO SE USA -like con "`* *": entre comillas dobles PowerShell se come el
@@ -301,8 +315,8 @@ if (-not (Sucio)) { Bien "arranca limpio" } else { Mal "arranca sucio" }
 # Clic en el medio de la etiqueta: la selecciona y le da el foco al canvas. Es
 # un "arrastre" de cero pixeles.
 $pt = EnPantalla 60 30
-[void][W]::SetForegroundWindow($hMain); Start-Sleep -Milliseconds 300
-[M]::Clic($pt[0], $pt[1])
+[void](TraerAlFrente $p $hMain)
+Tocar $pt[0] $pt[1]
 
 $sel = [W]::SeleccionDeLista($arbol)
 if ($sel -ge 0 -and ([W]::ItemDeLista($arbol, $sel)) -like "$nombre *") { Bien "quedo seleccionado $nombre" }
@@ -316,8 +330,8 @@ Write-Host ""
 Write-Host "=== 2. Flecha mantenida 10 px = un solo paso ===" -ForegroundColor Cyan
 VentanaQuieta "2"
 
-[void][W]::SetForegroundWindow($hMain); Start-Sleep -Milliseconds 300
-[M]::Mantener(0x27, 10)   # VK_RIGHT
+[void](TraerAlFrente $p $hMain)
+[void](MantenerProtegido $p 0x27 10)   # VK_RIGHT
 
 if (Sucio) { Bien "mover lo ensucio" } else { Mal "mover no ensucio" }
 
@@ -367,10 +381,10 @@ VentanaQuieta "5"
 
 # Boton = indice 3 de la paleta; los items miden 15 px (medido en
 # disenador_en_pestanas.ps1). Se suelta en (330,200), donde no hay nada.
-[void][W]::SetForegroundWindow($hMain); Start-Sleep -Milliseconds 300
-[M]::Clic(($paleta.Left + 40), ($paleta.Top + 7 + 3 * 15))
+[void](TraerAlFrente $p $hMain)
+Tocar ($paleta.Left + 40) ($paleta.Top + 7 + 3 * 15)
 $pt = EnPantalla 330 200
-[M]::Clic($pt[0], $pt[1])
+Tocar $pt[0] $pt[1]
 
 if ((Controles) -eq 7) { Bien "se solto el control nuevo (7)" } else { Mal "tras soltar hay $(Controles) controles" }
 
@@ -383,7 +397,7 @@ VentanaQuieta "6"
 # la columna de nombres de una fila, se navega con teclas hasta "Nombre"
 # (Inicio = categoria "Identidad", Abajo = Nombre) y se escribe: eso abre la
 # casilla de edicion con el foco.
-[M]::Clic(($rArbol.Left + 50), ($rArbol.Bottom + 26 + 60))
+Tocar ($rArbol.Left + 50) ($rArbol.Bottom + 26 + 60)
 Teclas "{HOME}"
 Teclas "{DOWN}"
 Teclas "zz"
@@ -407,7 +421,7 @@ else { Mal "tras Esc el control nuevo quedo como '$([W]::ItemDeLista($arbol, 6))
 
 # Se vuelve al canvas.
 $pt = EnPantalla 370 290
-[M]::Clic($pt[0], $pt[1])
+Tocar $pt[0] $pt[1]
 
 Teclas "^z"
 if ((Controles) -eq 6) { Bien "con el foco en el canvas, Ctrl+Z saco el control soltado (6)" }
@@ -426,8 +440,8 @@ if (Sucio) { Mal "el paso 7 arranca sucio: los pasos anteriores dejaron algo sin
 
 # a) Clic con temblor de 1 px: tiene que quedar dentro de la tolerancia de clic.
 $pt = EnPantalla 160 75
-[void][W]::SetForegroundWindow($hMain); Start-Sleep -Milliseconds 300
-[M]::ClicConTemblor($pt[0], $pt[1])
+[void](TraerAlFrente $p $hMain)
+TocarConTemblor $pt[0] $pt[1]
 
 if (-not (Sucio)) { Bien "un clic con temblor de 1 px NO ensucio" } else { Mal "un clic con temblor de 1 px ensucio la pestana" }
 
@@ -437,7 +451,7 @@ if ([int]$c.X -eq 110 -and [int]$c.Y -eq 60) { Bien "sigue en (110, 60)" } else 
 # b) Estirar la manija DERECHA 20 px: cambia el ancho y el borde izquierdo
 # (X=110, fuera de la grilla) no se toca. La manija E esta en (210, 75).
 $p1 = EnPantalla 210 75; $p2 = EnPantalla 230 75
-[M]::Arrastrar($p1[0], $p1[1], $p2[0], $p2[1])
+ArrastrarSobreEditor $p1[0] $p1[1] $p2[0] $p2[1]
 
 $c = EnDisco $b
 if ([int]$c.Ancho -eq 120) { Bien "la manija derecha dejo el ancho en 120" } else { Mal "tras la manija derecha el ancho es $($c.Ancho), se esperaba 120" }
@@ -446,7 +460,7 @@ if ([int]$c.X -eq 110 -and [int]$c.Y -eq 60) { Bien "X e Y no se movieron (110, 
 # c) Arrastre de verdad, 30 px a la derecha: se ajusta a la grilla como antes.
 # 110 + 30 = 140, que ya es multiplo de 4; Y=60 tambien.
 $p1 = EnPantalla 170 75; $p2 = EnPantalla 200 75
-[M]::Arrastrar($p1[0], $p1[1], $p2[0], $p2[1])
+ArrastrarSobreEditor $p1[0] $p1[1] $p2[0] $p2[1]
 
 $c = EnDisco $b
 if ([int]$c.X -eq 140 -and [int]$c.Y -eq 60) { Bien "el arrastre real lo llevo a (140, 60), en la grilla" } else { Mal "tras arrastrar quedo en ($($c.X), $($c.Y)), se esperaba (140, 60)" }
@@ -454,7 +468,7 @@ if ([int]$c.X -eq 140 -and [int]$c.Y -eq 60) { Bien "el arrastre real lo llevo a
 # d) Estirar la manija IZQUIERDA 10 px hacia la izquierda: el borde izquierdo
 # va a la grilla (140-10=130 -> 128) y el DERECHO queda fijo en 140+120=260.
 $p1 = EnPantalla 140 75; $p2 = EnPantalla 130 75
-[M]::Arrastrar($p1[0], $p1[1], $p2[0], $p2[1])
+ArrastrarSobreEditor $p1[0] $p1[1] $p2[0] $p2[1]
 
 $c = EnDisco $b
 $derecha = [int]$c.X + [int]$c.Ancho

@@ -15,7 +15,11 @@ al terminarla, con la fecha y el commit.
 
 Hecho: 0.1, 0.2, 0.3, 0.4 y la Etapa 2 (barras). Lo que sigue:
 
-1. **Confirmar las decisiones con un «sí» (Fabián)**. Si no dice otra cosa,
+1. ✅ *(hecho el 23/09, al retomar: se tomaron las recomendadas; la
+   protección está en `diagnostico\proteccion_interfaz.ps1`, verificada con
+   `verificar_proteccion.ps1`, y los avisos muestran solo el NOMBRE del
+   programa, nunca el título de una ventana ajena)*.
+   **Confirmar las decisiones con un «sí» (Fabián)**. Si no dice otra cosa,
    se toman las recomendadas:
    - Terminal con **ConPTY** → recomendado: sí.
    - **`Dock` en el anfitrión de acople** (única excepción a la regla del

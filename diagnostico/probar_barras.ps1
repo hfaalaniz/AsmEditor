@@ -141,6 +141,7 @@ public class W {
 "@
 
 . "$PSScriptRoot\editor_aislado.ps1"
+. "$PSScriptRoot\proteccion_interfaz.ps1"
 $exe = PrepararEditorAislado
 
 $fallas = 0
@@ -154,7 +155,8 @@ function Texto($r) { "x=$($r.Left) y=$($r.Top) $($r.Right - $r.Left)x$($r.Bottom
 function EsDelEditor($x, $y) {
     if ([W]::ProcesoEn($x, $y) -eq [uint32]$script:p.Id) { return $true }
     $menuSistema = [W]::FindWindow("#32768", $null)
-    Mal "el punto ($x,$y) esta tapado por '$([W]::TituloEn($x, $y))': NO se toca"
+    # Solo el nombre del programa, nunca el titulo (ver proteccion_interfaz.ps1).
+    Mal "el punto ($x,$y) esta tapado por otro programa ($([ProteccionUI]::Programa([ProteccionUI]::RaizEn($x, $y)))): NO se toca"
     return $false
 }
 function Tocar($a)           { if (EsDelEditor $a[0] $a[1]) { [W]::Clic.Invoke($a[0], $a[1]) } }
@@ -268,7 +270,9 @@ $c = [W]::Cliente($h)
 Tocar @(($c.Left + 18), ($c.Top + 16))
 $menu = [W]::FindWindow("#32768", $null)
 if ($menu -ne [IntPtr]::Zero -and [W]::IsWindowVisible($menu)) { Bien "el clic en el logo abrio el menu de sistema" } else { Mal "el logo no abrio el menu de sistema" }
-[System.Windows.Forms.SendKeys]::SendWait("{ESC}"); Start-Sleep -Milliseconds 500
+# Protegida: el menu de sistema es del proceso del editor; si otra ventana
+# tomo el primer plano, el Esc no sale (ver proteccion_interfaz.ps1).
+[void](TeclasProtegidas $p "{ESC}" 500)
 
 # ---------------------------------------------------------------------------
 Write-Host ""; Write-Host "=== 5. Botones de la barra ===" -ForegroundColor Cyan
@@ -319,7 +323,7 @@ Start-Sleep -Milliseconds 500
 CapturarPantalla "barras_menu_target.png"
 Write-Host "  ventanas del editor tras el clic: $((([W]::TitulosDe([uint32]$p.Id)) | ForEach-Object { "'$_'" }) -join ', ')"
 # El menu se abre hacia arriba; se elige el segundo target con el teclado.
-[System.Windows.Forms.SendKeys]::SendWait("{DOWN}{DOWN}{ENTER}"); Start-Sleep -Milliseconds 800
+[void](TeclasProtegidas $p "{DOWN}{DOWN}{ENTER}" 800)
 $e = EtiquetasEstado; $despues = $e[$e.Count - 1].Texto
 if ($despues -ne $target.Texto -and $despues.Length -gt 0) { Bien "el target cambio a '$despues'" } else { Mal "el target no cambio: '$despues'" }
 

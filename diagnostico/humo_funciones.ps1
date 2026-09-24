@@ -1,4 +1,4 @@
-# Verifica las tres funciones nuevas sobre la ventana real, con SendKeys:
+﻿# Verifica las tres funciones nuevas sobre la ventana real, con SendKeys:
 #   1. Multiples pestañas (Ctrl+O abre, Ctrl+W cierra, Ctrl+Tab rota)
 #   2. Autocompletado (tipear 'mo' debe abrir el popup)
 #   3. Explorador lateral (Ctrl+B lo oculta y lo muestra)
@@ -18,11 +18,14 @@ Start-Sleep -Seconds 3
 $p.Refresh()
 if ($p.HasExited) { throw "El editor se cerro solo al arrancar." }
 
+# Teclas protegidas: solo salen con el editor en primer plano (ver
+# proteccion_interfaz.ps1; el 23/09 teclas de prueba pudieron ir a otras ventanas).
+. "$PSScriptRoot\proteccion_interfaz.ps1"
+
 function Enfocar {
-    [void][Microsoft.VisualBasic.Interaction]::AppActivate($p.Id)
-    Start-Sleep -Milliseconds 400
+    $p.Refresh()
+    if (-not (TraerAlFrente $p $p.MainWindowHandle)) { AvisoProteccion "el editor no pudo pasar al primer plano" }
 }
-Add-Type -AssemblyName Microsoft.VisualBasic
 
 function Estado($etiqueta) {
     $p.Refresh()
@@ -40,8 +43,7 @@ Write-Host ""
 Write-Host "== Pestañas: Ctrl+N tres veces =="
 Enfocar
 foreach ($i in 1..3) {
-    [System.Windows.Forms.SendKeys]::SendWait("^n")
-    Start-Sleep -Milliseconds 700
+    [void](TeclasProtegidas $p "^n" 700)
     Estado "tras Ctrl+N #$i"
 }
 
@@ -49,34 +51,29 @@ Write-Host ""
 Write-Host "== Pestañas: Ctrl+Tab para rotar =="
 Enfocar
 foreach ($i in 1..2) {
-    [System.Windows.Forms.SendKeys]::SendWait("^{TAB}")
-    Start-Sleep -Milliseconds 600
+    [void](TeclasProtegidas $p "^{TAB}" 600)
     Estado "tras Ctrl+Tab #$i"
 }
 
 Write-Host ""
 Write-Host "== Autocompletado: tipear 'mo' en una linea nueva =="
 Enfocar
-[System.Windows.Forms.SendKeys]::SendWait("{END}{ENTER}    mo")
-Start-Sleep -Milliseconds 900
+[void](TeclasProtegidas $p "{END}{ENTER}    mo" 900)
 Estado "tras tipear 'mo'"
 
 Write-Host ""
 Write-Host "== Autocompletado: Escape para cerrar el popup =="
 Enfocar
-[System.Windows.Forms.SendKeys]::SendWait("{ESC}")
-Start-Sleep -Milliseconds 500
+[void](TeclasProtegidas $p "{ESC}" 500)
 Estado "tras Escape"
 
 Write-Host ""
 Write-Host "== Explorador: Ctrl+B ocultar y mostrar =="
 Enfocar
-[System.Windows.Forms.SendKeys]::SendWait("^b")
-Start-Sleep -Milliseconds 600
+[void](TeclasProtegidas $p "^b" 600)
 Estado "explorador oculto"
 Enfocar
-[System.Windows.Forms.SendKeys]::SendWait("^b")
-Start-Sleep -Milliseconds 600
+[void](TeclasProtegidas $p "^b" 600)
 Estado "explorador visible"
 
 Write-Host ""

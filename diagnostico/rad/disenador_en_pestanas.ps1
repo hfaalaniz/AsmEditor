@@ -165,10 +165,11 @@ Write-Host "  titulo: '$($principal.Value)'"
 Write-Host ""
 Write-Host "=== 1. Ctrl+D abre una PESTANA, no una ventana ===" -ForegroundColor Cyan
 
-[void][W]::SetForegroundWindow($hMain)
-Start-Sleep -Milliseconds 900
-[System.Windows.Forms.SendKeys]::SendWait("^d")
-Start-Sleep -Seconds 3
+# Teclas y clics protegidos: solo sobre el editor (ver proteccion_interfaz.ps1;
+# el 23/09 el Ctrl+D y el Ctrl+W de esta prueba pudieron ir a otra ventana).
+. "$PSScriptRoot\..\proteccion_interfaz.ps1"
+if (-not (TraerAlFrente $p $hMain)) { AvisoProteccion "el editor no pudo pasar al primer plano" }
+[void](TeclasProtegidas $p "^d" 3000)
 
 $vent2 = [W]::VentanasDe([uint32]$p.Id)
 
@@ -282,8 +283,8 @@ if ($null -eq $paleta) {
     [void][W]::GetWindowRect($hMain, [ref]$rMain)
 
     # Boton = indice 3 de la paleta; los items miden 15 px.
-    [M]::Clic(($paleta.Left + 40), ($paleta.Top + 7 + 3 * 15))
-    [M]::Clic(($paleta.Right + 150), ($rMain.Top + 220))
+    [void](ClicProtegido $p ($paleta.Left + 40) ($paleta.Top + 7 + 3 * 15))
+    [void](ClicProtegido $p ($paleta.Right + 150) ($rMain.Top + 220))
     Start-Sleep -Milliseconds 600
 
     $t = ([W]::VentanasDe([uint32]$p.Id) |
@@ -308,10 +309,8 @@ Write-Host "  captura: $PSScriptRoot\disenador_en_pestana.png"
 Write-Host ""
 Write-Host "=== 4. Ctrl+W cierra la pestana y pregunta por los cambios ===" -ForegroundColor Cyan
 
-[void][W]::SetForegroundWindow($hMain)
-Start-Sleep -Milliseconds 700
-[System.Windows.Forms.SendKeys]::SendWait("^w")
-Start-Sleep -Seconds 2
+if (-not (TraerAlFrente $p $hMain)) { AvisoProteccion "el editor no pudo pasar al primer plano" }
+[void](TeclasProtegidas $p "^w" 2000)
 
 # ⚠ EL DIALOGO DE ESTE EDITOR NO SE PUEDE LEER POR TEXTO: Dialogo.Preguntar no
 # es una ventana aparte NI usa Labels con texto — PINTA el contenido sobre un
@@ -342,7 +341,7 @@ if ($bloqueado) {
     } else {
         $rb = New-Object W+RECT
         [void][W]::GetWindowRect($btn, [ref]$rb)
-        [M]::Clic(([int](($rb.Left + $rb.Right) / 2)), ([int](($rb.Top + $rb.Bottom) / 2)))
+        [void](ClicProtegido $p ([int](($rb.Left + $rb.Right) / 2)) ([int](($rb.Top + $rb.Bottom) / 2)))
         Start-Sleep -Seconds 2
     }
 } else {

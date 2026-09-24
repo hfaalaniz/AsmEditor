@@ -18,6 +18,7 @@
 # ============================================================================
 
 $ErrorActionPreference = "Stop"
+. "$PSScriptRoot\..\..\proteccion_interfaz.ps1"   # ProteccionUI: nombre del programa en los avisos
 Add-Type -AssemblyName System.Windows.Forms, System.Drawing
 
 Add-Type @"
@@ -160,7 +161,8 @@ function AlFrente {
 function EsNuestro($x, $y) {
     $raiz = [W]::RaizEn($x, $y)
     if ($raiz -eq $script:h) { return $true }
-    Mal "el punto ($x,$y) esta tapado por '$([W]::TituloDe($raiz))': NO se toca"
+    # Solo el nombre del programa, nunca el titulo (ver proteccion_interfaz.ps1).
+    Mal "el punto ($x,$y) esta tapado por otro programa ($([ProteccionUI]::Programa($raiz))): NO se toca"
     return $false
 }
 # Reciben los numeros como un arreglo: Tocar @(x, y). Adentro se usa .Invoke

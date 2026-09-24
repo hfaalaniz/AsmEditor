@@ -323,14 +323,15 @@ Write-Host "=== 3. F7 compila el PRINCIPAL, no la pestana activa ===" -Foregroun
 
 # Se abre el auxiliar.inc (que no es un programa) y se compila. Si el editor
 # compilara la pestana activa, ensamblaria el .inc y no habria .exe.
-[void][W]::SetForegroundWindow($principal.Key)
-Start-Sleep -Milliseconds 900
+# Teclas protegidas: solo salen con el editor en primer plano (ver
+# proteccion_interfaz.ps1; el 23/09 este Ctrl+Shift+B pudo ir a otra ventana).
+. "$PSScriptRoot\..\proteccion_interfaz.ps1"
+if (-not (TraerAlFrente $p $principal.Key)) { AvisoProteccion "el editor no pudo pasar al primer plano" }
 
 # Abrir auxiliar.inc por el dialogo de abrir (Ctrl+O) seria fragil; se lo
 # pasa por linea de comandos a una segunda instancia? No: se usa el explorador.
 # Mas simple y robusto: se compila con Ctrl+Shift+B y se mira que produjo.
-[System.Windows.Forms.SendKeys]::SendWait("^+b")
-Start-Sleep -Seconds 6
+[void](TeclasProtegidas $p "^+b" 6000)
 
 $objEsperado = "$banco\bin\principal.obj"
 $exeEsperado = "$banco\bin\principal.exe"
