@@ -106,6 +106,28 @@ public sealed class UiState
     public bool RestoreSession { get; set; } = true;
 
     /// <summary>
+    /// Qué hacer al arrancar sin archivo por línea de comandos. Por defecto la
+    /// ventana de inicio. Un settings.json anterior no lo trae y queda en ese
+    /// valor: a partir de la ventana de inicio el editor YA NO reabre solo el
+    /// último proyecto, salvo que se elija <see cref="Core.AlIniciar.UltimoProyecto"/>.
+    /// </summary>
+    public AlIniciar AlIniciar { get; set; } = AlIniciar.VentanaDeInicio;
+
+    /// <summary>
+    /// Cuándo se abrió por última vez cada proyecto (ruta del .asmproj → fecha),
+    /// para agrupar los recientes en la ventana de inicio. Los settings.json de
+    /// antes no lo traen: ahí la ventana usa la fecha del archivo.
+    /// </summary>
+    public Dictionary<string, DateTime> FechasProyectos { get; set; } = new();
+
+    /// <summary>
+    /// Qué archivos tenía abiertos cada proyecto al cerrarlo, para reabrirlos
+    /// al volver a abrirlo desde la ventana de inicio. Reemplaza, para los
+    /// proyectos, a la lista única <see cref="OpenFiles"/> de antes.
+    /// </summary>
+    public Dictionary<string, SesionDeProyecto> SesionesProyectos { get; set; } = new();
+
+    /// <summary>
     /// Registra un archivo como recién usado: queda primero, sin duplicados y
     /// respetando el tope.
     ///
@@ -139,7 +161,10 @@ public sealed class UiState
     /// archivos en un solo menú de recientes hace que abrir uno u otro sea una
     /// lotería según la extensión.
     /// </summary>
-    public void AddRecentProject(string? path)
+    public void AddRecentProject(string? path) => AddRecentProject(path, DateTime.Now);
+
+    /// <summary>Igual, con la fecha explícita (las pruebas no dependen del reloj).</summary>
+    public void AddRecentProject(string? path, DateTime cuando)
     {
         if (string.IsNullOrWhiteSpace(path)) return;
 
@@ -150,12 +175,54 @@ public sealed class UiState
         {
             RecentProjects.RemoveRange(MaxRecientes, RecentProjects.Count - MaxRecientes);
         }
+
+        QuitarClave(FechasProyectos, path);
+        FechasProyectos[path] = cuando;
     }
 
+    /// <summary>
+    /// Saca un proyecto de los recientes ("Quitar de la lista" en la ventana de
+    /// inicio), con su fecha y su sesión: no borra nada del disco.
+    /// </summary>
     public void RemoveRecentProject(string? path)
     {
         if (string.IsNullOrWhiteSpace(path)) return;
         RecentProjects.RemoveAll(p => PathComparer.SamePath(p, path));
+        QuitarClave(FechasProyectos, path);
+        QuitarClave(SesionesProyectos, path);
+    }
+
+    /// <summary>Anota qué archivos tenía abiertos el proyecto al cerrarlo.</summary>
+    public void GuardarSesionDeProyecto(string? proyecto, IEnumerable<string> archivos, int activo)
+    {
+        if (string.IsNullOrWhiteSpace(proyecto)) return;
+
+        var lista = archivos.Where(a => !string.IsNullOrWhiteSpace(a)).ToList();
+
+        QuitarClave(SesionesProyectos, proyecto);
+        SesionesProyectos[proyecto] = new SesionDeProyecto
+        {
+            Archivos = lista,
+            Activo = lista.Count == 0 ? 0 : Math.Clamp(activo, 0, lista.Count - 1)
+        };
+    }
+
+    /// <summary>La sesión guardada de un proyecto, o null si no tiene.</summary>
+    public SesionDeProyecto? SesionDe(string? proyecto)
+    {
+        if (string.IsNullOrWhiteSpace(proyecto)) return null;
+
+        foreach (var s in SesionesProyectos)
+        {
+            if (PathComparer.SamePath(s.Key, proyecto)) return s.Value;
+        }
+        return null;
+    }
+
+    /// <summary>Quita la entrada de esa ruta aunque esté escrita distinto (mayúsculas, barras).</summary>
+    private static void QuitarClave<T>(Dictionary<string, T> dic, string ruta)
+    {
+        foreach (var k in dic.Keys.Where(k => PathComparer.SamePath(k, ruta)).ToList()) dic.Remove(k);
     }
 
     public void ClearRecentProjects() => RecentProjects.Clear();
@@ -187,6 +254,10 @@ public sealed class UiState
         RecentFiles ??= new List<string>();
         RecentProjects ??= new List<string>();
         Window ??= new WindowGeometry();
+        FechasProyectos ??= new Dictionary<string, DateTime>();
+        SesionesProyectos ??= new Dictionary<string, SesionDeProyecto>();
+
+        if (!Enum.IsDefined(AlIniciar)) AlIniciar = AlIniciar.VentanaDeInicio;
 
         OpenFiles.RemoveAll(string.IsNullOrWhiteSpace);
         RecentFiles.RemoveAll(string.IsNullOrWhiteSpace);
@@ -224,7 +295,30 @@ public sealed class UiState
 
         if (OpenFiles.Count == 0) ActiveFileIndex = 0;
         else ActiveFileIndex = Math.Clamp(ActiveFileIndex, 0, OpenFiles.Count - 1);
+
+        // Fechas y sesiones solo de proyectos que siguen en los recientes (o
+        // del abierto): sin esto crecerían para siempre con proyectos viejos.
+        bool Vigente(string ruta) =>
+            RecentProjects.Any(p => PathComparer.SamePath(p, ruta)) ||
+            (ProyectoAbierto is not null && PathComparer.SamePath(ProyectoAbierto, ruta));
+
+        foreach (var k in FechasProyectos.Keys.Where(k => !Vigente(k)).ToList()) FechasProyectos.Remove(k);
+        foreach (var k in SesionesProyectos.Keys.Where(k => !Vigente(k)).ToList()) SesionesProyectos.Remove(k);
+
+        foreach (var s in SesionesProyectos.Values)
+        {
+            s.Archivos ??= new List<string>();
+            s.Archivos.RemoveAll(string.IsNullOrWhiteSpace);
+            s.Activo = s.Archivos.Count == 0 ? 0 : Math.Clamp(s.Activo, 0, s.Archivos.Count - 1);
+        }
     }
+}
+
+/// <summary>Los archivos que un proyecto tenía abiertos al cerrarlo, y cuál estaba activo.</summary>
+public sealed class SesionDeProyecto
+{
+    public List<string> Archivos { get; set; } = new();
+    public int Activo { get; set; }
 }
 
 /// <summary>
