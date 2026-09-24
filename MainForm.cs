@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 using AsmEditor.Core;
+using AsmEditor.Core.Acople;
 using AsmEditor.Core.Disenador;
 using AsmEditor.Core.Proyecto;
 
@@ -13,8 +14,21 @@ public class MainForm : Form
     private readonly RichTextBox _output = new();
     private readonly ProjectExplorer _explorer = new();
 
-    private readonly SplitContainer _outerSplit = new();   // explorador | resto
-    private readonly SplitContainer _innerSplit = new();   // pestañas   | salida
+    /// <summary>
+    /// El acople de paneles (Etapa 3 de PLAN_IDE.md): el explorador a la
+    /// derecha, la lista de errores y la salida abajo, los documentos al
+    /// centro. Reemplaza a los dos SplitContainer de antes.
+    /// </summary>
+    private readonly AnfitrionAcople _acople = new();
+
+    // Los Id son fijos: con ellos se guarda el diseño (no cambiarlos).
+    private const string IdExplorador = "explorador";
+    private const string IdErrores = "errores";
+    private const string IdSalida = "salida";
+
+    private readonly VentanaHerramienta _ventanaExplorador = new() { Id = IdExplorador, Titulo = "Explorador" };
+    private readonly VentanaHerramienta _ventanaErrores = new() { Id = IdErrores, Titulo = "Lista de errores" };
+    private readonly VentanaHerramienta _ventanaSalida = new() { Id = IdSalida, Titulo = "Salida" };
 
     /// <summary>
     /// La barra de título propia, con el menú integrado (Etapa 2 de
@@ -60,10 +74,6 @@ public class MainForm : Form
 
     // ---- Panel de errores y parseo de diagnósticos ----
     private readonly ErrorListPanel _errorList = new();
-
-    // También PestanasAsm: un TabControl estándar acá dejaría una franja con el
-    // color del sistema justo debajo del editor.
-    private readonly PestanasAsm _bottomTabs = new();
     private readonly DiagnosticParser _parser = new();
 
     // ---- Estado de la compilación en curso ----
@@ -103,7 +113,11 @@ public class MainForm : Form
     private readonly List<ToolStripButton> _toolbarBuildItems = new();
 
     private FindReplaceForm? _findReplaceForm;
+
+    // Ver → paneles: la marca dice si se ve (DisenoCambiado la actualiza).
     private ToolStripMenuItem? _explorerToggle;
+    private ToolStripMenuItem? _verErroresItem;
+    private ToolStripMenuItem? _verSalidaItem;
 
     public MainForm(string[]? filesToOpen = null, FormSplash? splash = null)
     {
@@ -205,13 +219,17 @@ public class MainForm : Form
             (_, _) => Active?.FocusEditor()));
 
         var viewMenu = new ToolStripMenuItem("&Ver");
-        _explorerToggle = new ToolStripMenuItem("&Explorador de archivos", null, (_, _) => ToggleExplorer())
+        // Los paneles del acople: la marca dice si se ven; clic los muestra u
+        // oculta. Las marcas las pone Acople_DisenoCambiado.
+        _explorerToggle = new ToolStripMenuItem("&Explorador", null, (_, _) => ToggleExplorer())
         {
-            Checked = true,
             CheckOnClick = false,
             ShortcutKeys = Keys.Control | Keys.B
         };
         viewMenu.DropDownItems.Add(_explorerToggle);
+        _verErroresItem = AddItem(viewMenu, "&Lista de errores", Keys.None, (_, _) => _acople.Alternar(IdErrores));
+        _verSalidaItem = AddItem(viewMenu, "Sa&lida", Keys.None, (_, _) => _acople.Alternar(IdSalida));
+        viewMenu.DropDownItems.Add(new ToolStripSeparator());
         // Shift+F5 está reservado para detener la compilación: acá iría en conflicto.
         AddItem(viewMenu, "&Actualizar explorador", Keys.Control | Keys.R, (_, _) => _explorer.Refresh_());
         viewMenu.DropDownItems.Add(new ToolStripSeparator());
@@ -317,42 +335,28 @@ public class MainForm : Form
         _output.ForeColor = Tema.SalidaTexto;
         _output.BorderStyle = BorderStyle.None;
 
-        // El panel inferior tiene dos solapas: la lista de errores y la salida cruda.
-        // La salida en texto plano no se pierde, queda en su propia solapa.
-        _bottomTabs.Dock = DockStyle.Fill;
-        // Solapas fijas: una X no tendría qué cerrar.
-        _bottomTabs.PermiteCerrar = false;
-        _bottomTabs.UsaFondoDeCodigo = false;
-        _bottomTabs.Alignment = TabAlignment.Bottom;
-        _bottomTabs.ItemSize = new Size(110, PestanasAsm.AltoPestana);
+        // ── El acople ──
+        // Los paneles, como en Visual Studio: el explorador a la derecha; la
+        // lista de errores y la salida abajo, como dos pestañas de la misma
+        // zona (la salida en texto plano no se pierde: es su propio panel).
+        _ventanaExplorador.Contenido = _explorer;
+        _ventanaErrores.Contenido = _errorList;
+        _ventanaSalida.Contenido = _output;
 
-        var errorPage = new TabPage("Errores") { BackColor = Tema.Superficie };
-        errorPage.Controls.Add(_errorList);
-
-        var outputPage = new TabPage("Salida") { BackColor = Tema.SalidaFondo };
-        outputPage.Controls.Add(_output);
-
-        _bottomTabs.TabPages.Add(errorPage);
-        _bottomTabs.TabPages.Add(outputPage);
-
-        _innerSplit.Dock = DockStyle.Fill;
-        _innerSplit.Orientation = Orientation.Horizontal;
+        _acople.Dock = DockStyle.Fill;
+        _acople.Registrar(_ventanaExplorador, ZonaAcople.Derecha);
+        _acople.Registrar(_ventanaErrores, ZonaAcople.Abajo);
+        _acople.Registrar(_ventanaSalida, ZonaAcople.Abajo);
+        _acople.DisenoCambiado += Acople_DisenoCambiado;
 
         // La bienvenida se agrega PRIMERO para que las pestañas queden encima:
         // con Dock, lo agregado después se acomoda primero.
-        _innerSplit.Panel1.Controls.Add(_bienvenida);
-        _innerSplit.Panel1.Controls.Add(_tabs);
-        _innerSplit.Panel2.Controls.Add(_bottomTabs);
+        _acople.Centro.Add(_bienvenida);
+        _acople.Centro.Add(_tabs);
 
         _bienvenida.NuevoPedido += NewFile;
         _bienvenida.AbrirPedido += OpenFileDialog;
         _bienvenida.ArchivoElegido += OpenPath;
-
-        _outerSplit.Dock = DockStyle.Fill;
-        _outerSplit.Orientation = Orientation.Vertical;
-        _outerSplit.Panel1.Controls.Add(_explorer);
-        _outerSplit.Panel2.Controls.Add(_innerSplit);
-        _outerSplit.Panel1MinSize = 140;
 
         BuildToolbar();
 
@@ -366,8 +370,8 @@ public class MainForm : Form
 
         // Orden de z-order de WinForms: con Dock, lo que se agrega DESPUÉS se acomoda
         // primero y queda por encima. El Fill va primero; las barras Top/Bottom
-        // después, o el split las tapa y se come la fila de pestañas.
-        Controls.Add(_outerSplit);
+        // después, o el acople las tapa y se come la fila de pestañas.
+        Controls.Add(_acople);
         Controls.Add(_barraEstado);
 
         if (_toolbar is not null) Controls.Add(_toolbar);
@@ -376,11 +380,7 @@ public class MainForm : Form
         // herramientas, en la franja que antes era el título de Windows.
         Controls.Add(_barraTitulo);
 
-        Shown += (_, _) =>
-        {
-            _outerSplit.SplitterDistance = 230;
-            _innerSplit.SplitterDistance = (int)(_innerSplit.Height * 0.68);
-        };
+        ActualizarMarcasDePaneles();
     }
 
     /// <summary>
@@ -1337,13 +1337,16 @@ public class MainForm : Form
     // Explorador
     // ---------------------------------------------------------------
 
-    private void ToggleExplorer()
+    private void ToggleExplorer() => _acople.Alternar(IdExplorador);
+
+    /// <summary>Se mostró, ocultó o movió un panel: las marcas de Ver lo siguen.</summary>
+    private void Acople_DisenoCambiado(object? sender, EventArgs e) => ActualizarMarcasDePaneles();
+
+    private void ActualizarMarcasDePaneles()
     {
-        _outerSplit.Panel1Collapsed = !_outerSplit.Panel1Collapsed;
-        if (_explorerToggle is not null)
-        {
-            _explorerToggle.Checked = !_outerSplit.Panel1Collapsed;
-        }
+        if (_explorerToggle is not null) _explorerToggle.Checked = _acople.EstaVisible(IdExplorador);
+        if (_verErroresItem is not null) _verErroresItem.Checked = _acople.EstaVisible(IdErrores);
+        if (_verSalidaItem is not null) _verSalidaItem.Checked = _acople.EstaVisible(IdSalida);
     }
 
     // ---------------------------------------------------------------
@@ -1637,12 +1640,11 @@ public class MainForm : Form
         _barraEstado.MostrarResultado(_errorList.ErrorCount, _errorList.WarningCount, _errorList.SummaryText);
     }
 
-    /// <summary>Clic en los contadores de la barra de estado: la solapa de errores.</summary>
-    private void MostrarListaDeErrores()
-    {
-        // La solapa 0 del panel de abajo es "Errores" (ver BuildLayout).
-        if (_bottomTabs.TabPages.Count > 0) _bottomTabs.SelectedIndex = 0;
-    }
+    /// <summary>
+    /// Clic en los contadores de la barra de estado: la lista de errores, al
+    /// frente y con el foco, aunque estuviera oculta (como en VS).
+    /// </summary>
+    private void MostrarListaDeErrores() => _acople.Mostrar(IdErrores, enfocar: true);
 
     /// <summary>Detiene la compilación en curso matando el proceso externo.</summary>
     private void StopBuild()
@@ -2980,7 +2982,9 @@ public class MainForm : Form
             RedibujarIconosBarra();
         }
 
-        _bottomTabs.BackColor = Tema.Superficie;
+        // Los paneles del acople se pintan solos (escuchan Tema.TemaCambiado);
+        // sus menús usan el renderer del editor, como la barra de estado.
+        _acople.RendererMenus = new RendererBarras();
 
         ActualizarMarcaDeTema();
 

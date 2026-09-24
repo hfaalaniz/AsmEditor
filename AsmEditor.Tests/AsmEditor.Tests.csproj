@@ -17,6 +17,7 @@
     <Compile Include="..\Core\*.cs" LinkBase="Core" />
     <Compile Include="..\Core\Disenador\*.cs" LinkBase="Core\Disenador" />
     <Compile Include="..\Core\Proyecto\*.cs" LinkBase="Core\Proyecto" />
+    <Compile Include="..\Core\Acople\*.cs" LinkBase="Core\Acople" />
   </ItemGroup>
 
   <ItemGroup>

@@ -256,8 +256,10 @@ Write-Host "  titulo: '$([W]::Titulo($hMain))'"
 
 try {
 
-# Arbol de controles = el ListBox visible MAS A LA DERECHA (la paleta va a la
-# izquierda del canvas y el explorador todavia mas a la izquierda).
+# Los unicos ListBox visibles son los del disenador (el explorador es un
+# TreeView): arbol de controles = el MAS A LA DERECHA; paleta = el MAS A LA
+# IZQUIERDA. ⚠ Hasta el 23/09 la paleta se buscaba con "x > 240" porque el
+# explorador ocupaba la izquierda; desde la Etapa 3 esta a la derecha.
 $listas = [W]::Hijas($hMain) | Where-Object { [W]::Clase($_) -like "*LISTBOX*" }
 $conRect = foreach ($l in $listas) {
     $r = New-Object W+RECT; [void][W]::GetWindowRect($l, [ref]$r)
@@ -267,9 +269,8 @@ $ordenadas = @($conRect | Sort-Object { $_.R.Left })
 $arbol  = $ordenadas[-1].H
 $rArbol = $ordenadas[-1].R
 
-# La paleta es la lista pasado el explorador (x > 240 respecto de la ventana).
 $rVentana = New-Object W+RECT; [void][W]::GetWindowRect($hMain, [ref]$rVentana)
-$paleta = @($ordenadas | Where-Object { $_.R.Left -gt ($rVentana.Left + 240) })[0].R
+$paleta = $ordenadas[0].R
 
 # Canvas = la ventana hija que mide exactamente formulario + 2 margenes de 40:
 # 400x300 -> 480x380. Es la unica con esa medida.

@@ -241,11 +241,30 @@ El modelo del diseño de ventanas (qué panel está en qué zona, tamaños,
 flotantes, ocultos) vive en `Core` y se prueba sin interfaz. Cada pieza
 visual nueva lleva su `.Designer.cs`.
 
-- [ ] **3a · Zonas fijas:** anfitrión con zonas izquierda / derecha / abajo /
-  centro, divisores redimensionables; ventana de herramienta con barra de
-  título (nombre, ▾, chincheta, ✕); mostrar y ocultar desde «Ver».
-- [ ] **3b · Pestañas por zona:** varios paneles en la misma zona (Lista de
-  errores · Salida · Terminal).
+⚠ **Cambio de orden (23/09, con OK de Fabián):** el acople se monta **en el
+editor desde 3a**, no en un banco aparte hasta 3g. Cada subetapa suma su
+función sobre el editor real; 3g queda para menú, barra, pie y pasar
+`MainForm` a `Designer.cs`. 3a y 3b van juntas: «Errores» y «Salida» ya
+compartían la zona de abajo, y sin pestañas una quedaba inaccesible.
+
+- [x] **3a · Zonas fijas** *(23/09)*: `Acople\AnfitrionAcople` (zonas
+  izquierda / derecha / abajo con `Splitter`, la de abajo ENTRE las laterales)
+  reemplaza a los dos `SplitContainer` de `MainForm`. `VentanaHerramienta`:
+  barra con nombre, ▾ (menú: Ocultar), ✕ (la chincheta está, oculta, hasta
+  3c); se resalta con el foco. Ver → Explorador (Ctrl+B) / Lista de errores /
+  Salida, con marca. Modelo: `Core\Acople\DisenoAcople` (18 pruebas,
+  verificadas con `romper_diseno_acople.ps1`, 8 defectos).
+  ⚠ Ocultar un panel con el foco adentro dejaba el foco en la ✕ estacionada
+  fuera de la ventana y **se morían todos los atajos**; el anfitrión lo
+  devuelve al centro, con `BeginInvoke` y `Focus()` explícito (medido con
+  `foco_al_ocultar.ps1`, dentro del proceso).
+  El explorador pasó a la **derecha**: se ajustaron `disenador_en_pestanas`
+  y `deshacer_en_disenador` (buscaban la paleta con «x > 240») y
+  `probar_por_interfaz` (recorría 6 niveles de ventanas; ahora 12).
+- [x] **3b · Pestañas por zona** *(23/09)*: `GrupoHerramientas` +
+  `TiraPestanasHerramienta` (pestañas abajo, solo con más de un panel; son
+  etiquetas reales para que las pruebas las lean). Lista de errores · Salida.
+  Prueba por interfaz: `acople.ps1`, verificada con `romper_acople.ps1`.
 - [ ] **3c · Auto-ocultar (chincheta):** el panel se repliega a una pestaña en
   el borde y se despliega al pasar el ratón.
 - [ ] **3d · Flotar:** arrastrar la barra de título fuera de la zona lo
@@ -301,6 +320,7 @@ visual nueva lleva su `.Designer.cs`.
 | 23/09/2026 | — | ver log | Diagnósticos viejos protegidos (`proteccion_interfaz.ps1`). |
 | 23/09/2026 | 1 | ver log | Ventana de inicio. 426 pruebas unitarias (17 nuevas de `RecientesInicio`, verificadas rompiéndolas). `ventana_inicio.ps1` 8 casos por interfaz, verificada con `romper_ventana_inicio.ps1` (6 defectos). |
 | 23/09/2026 | 1 | ver log | Ventana Configuración → Opciones (reemplaza a «Rutas de herramientas»). 431 pruebas unitarias (5 nuevas, verificadas con `romper_valores_opciones.ps1`, incluida una opción nueva sin conectar). `opciones.ps1` por interfaz, verificada con `romper_opciones.ps1` (6 defectos). `ventana_inicio` y `probar_barras` en verde. |
+| 23/09/2026 | 3a+3b | ver log | Acople en el editor: explorador a la derecha, Lista de errores · Salida abajo con pestañas, ✕ / Ver / Ctrl+B, divisores. 449 pruebas unitarias (18 del modelo, verificadas con `romper_diseno_acople.ps1`, 8 defectos). `acople.ps1` por interfaz, verificada con `romper_acople.ps1` (7 defectos). Corregido: el foco quedaba en la ✕ oculta y morían los atajos. Los 8 diagnósticos por interfaz en verde. |
 
 ### Pendientes detectados en la Etapa 2 (no tocados)
 

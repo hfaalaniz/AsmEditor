@@ -210,10 +210,14 @@ Write-Host "=== 3. Soltar controles marca la pestana como sucia ===" -Foreground
 
 # Ubicar la paleta midiendo, no estimando.
 #
-# ⚠ NO ALCANZA CON "EL ListBox MAS A LA IZQUIERDA": el arbol del EXPLORADOR
-# esta mas a la izquierda que la paleta, y quedarse con ese hacia clic en la
-# lista de archivos del proyecto. Se recorre TODO el arbol de controles y se
-# toma el ListBox que este a la derecha del explorador (x > 240).
+# Con la pestana del disenador al frente, los unicos ListBox visibles son los
+# del disenador: la paleta (a la izquierda del lienzo) y el arbol de
+# controles (a la derecha). El explorador es un TreeView y no cuenta.
+#
+# ⚠ HASTA EL 23/09 SE FILTRABA "x > 240" porque el explorador ocupaba los
+# primeros 230 px de la izquierda. Desde la Etapa 3 esta a la DERECHA (y se
+# puede mover): el filtro dejaba afuera a la paleta. Ahora: la paleta es el
+# ListBox mas a la izquierda, sin suponer donde esta el explorador.
 Add-Type @"
 using System;
 using System.Collections.Generic;
@@ -266,10 +270,8 @@ foreach ($lb in $todas) {
     Write-Host "    x=$($lb.Left) y=$($lb.Top) ancho=$($lb.Right - $lb.Left)"
 }
 
-# La paleta es la que esta pasado el explorador (~240 px) y mas a la izquierda
-# que el arbol de controles del formulario, que va a la derecha de todo.
-$candidatas = $todas | Where-Object { $_.Left -gt ($rVentana.Left + 240) } |
-              Sort-Object { $_.Left }
+# La paleta: la mas a la izquierda (el arbol de controles va a la derecha).
+$candidatas = $todas | Sort-Object { $_.Left }
 
 $paleta = if ($candidatas) {
     $c = @($candidatas)[0]

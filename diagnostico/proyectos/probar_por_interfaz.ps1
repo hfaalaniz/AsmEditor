@@ -58,8 +58,11 @@ public class W {
         Recorrer(raiz, r, 0);
         return r;
     }
+    // ⚠ HASTA 12 NIVELES: desde la Etapa 3 (acople) la cabecera del explorador
+    // esta a ~8 (formulario > anfitrion > zona > grupo > panel > ventana del
+    // panel > contenido > explorador). Con 6 no se la encontraba.
     static void Recorrer(IntPtr h, List<string> acc, int nivel) {
-        if (nivel > 6) return;
+        if (nivel > 12) return;
         IntPtr hijo = GetWindow(h, 5);
         while (hijo != IntPtr.Zero) {
             if (IsWindowVisible(hijo)) {
