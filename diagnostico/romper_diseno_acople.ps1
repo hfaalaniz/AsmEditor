@@ -24,9 +24,9 @@ $defectos = @(
        De = 'else Activos[zona] = visibles[Math.Min(i, visibles.Count - 1)];'
        A  = 'else Activos[zona] = visibles[0];' },
     # Desde la 3c el texto de Mostrar cambio: el viejo ("u.Visible = true;" +
-    # "Activos[u.Zona] = id;") ahora es el de Fijar y rompia OTRO metodo.
+    # "Activos[u.Zona] = id;") paso a ser el de Fijar y rompia OTRO metodo.
     @{ Nombre = "mostrar no lo deja activo"
-       De = '        if (!u.AutoOculto) Activos[u.Zona] = id;'; A = '' },
+       De = '        if (Acoplado(u)) Activos[u.Zona] = id;'; A = '' },
     @{ Nombre = "sin tamano minimo"
        De = 'Tamanos[zona] = Math.Max(TamanoMinimo, pixeles);'; A = 'Tamanos[zona] = pixeles;' },
     @{ Nombre = "mover no lo pone ultimo"
@@ -43,11 +43,12 @@ $defectos = @(
     @{ Nombre = "auto-ocultar el activo no pasa a la vecina"
        De = "        if (u.Visible) SoltarActivo(u.Zona, id);`n        u.AutoOculto = true;"; A = "        u.AutoOculto = true;" },
     @{ Nombre = "auto-ocultar un auto-oculto cerrado lo vuelve a mostrar"
-       De = 'out var u) || u.AutoOculto) return;'; A = 'out var u)) return;' },
+       De = 'out var u) || u.AutoOculto || u.Flotante) return;'; A = 'out var u) || u.Flotante) return;' },
+    # Desde la 3d, Fijar es Acoplar (la chincheta y "Acoplar" hacen lo mismo).
     @{ Nombre = "fijar no lo acopla"
-       De = "        u.AutoOculto = false;`n        u.Visible = true;`n        Activos[u.Zona] = id;"; A = "        u.Visible = true;`n        Activos[u.Zona] = id;" },
+       De = "        u.AutoOculto = false;`n        u.Flotante = false;"; A = "        u.Flotante = false;" },
     @{ Nombre = "fijar no lo deja activo"
-       De = "        u.AutoOculto = false;`n        u.Visible = true;`n        Activos[u.Zona] = id;"; A = "        u.AutoOculto = false;`n        u.Visible = true;" },
+       De = "        u.Flotante = false;`n        u.Visible = true;`n        Activos[u.Zona] = id;"; A = "        u.Flotante = false;`n        u.Visible = true;" },
     @{ Nombre = "ocultar pierde el auto-oculto"
        De = "        u.Visible = false;`n    }"; A = "        u.AutoOculto = false;`n        u.Visible = false;`n    }" },
     # NO VA "ocultar un auto-oculto le suelta el activo" (sacar el
@@ -57,11 +58,34 @@ $defectos = @(
     # arriba). Sin la guarda el resultado es el mismo: ninguna prueba puede
     # verlo (medido el 28/09: 0 fallas).
     @{ Nombre = "mostrar un auto-oculto lo anota como activo"
-       De = '        if (!u.AutoOculto) Activos[u.Zona] = id;'; A = '        Activos[u.Zona] = id;' },
+       De = '        if (Acoplado(u)) Activos[u.Zona] = id;'; A = '        Activos[u.Zona] = id;' },
     @{ Nombre = "mover no lo acopla"
-       De = "        u.AutoOculto = false;`n        Mostrar(id);"; A = "        Mostrar(id);" },
-    @{ Nombre = "activar anota un auto-oculto"
-       De = 'out var u) && !u.AutoOculto) Activos[u.Zona] = id;'; A = 'out var u)) Activos[u.Zona] = id;' }
+       De = "        Acoplar(id);`n    }"; A = "        Mostrar(id);`n    }" },
+    @{ Nombre = "activar anota un auto-oculto o un flotante"
+       De = 'out var u) && Acoplado(u)) Activos[u.Zona] = id;'; A = 'out var u)) Activos[u.Zona] = id;' },
+
+    # ---- Flotar (3d) ----
+    @{ Nombre = "los flotantes siguen ocupando su zona"
+       De = ' && !p.Value.Flotante && p.Value.AutoOculto'; A = ' && p.Value.AutoOculto' },
+    @{ Nombre = "flotar el activo no pasa a la vecina"
+       De = "        if (u.Visible && !u.AutoOculto) SoltarActivo(u.Zona, id);`n        u.AutoOculto = false;`n        u.Flotante = true;"
+       A  = "        u.AutoOculto = false;`n        u.Flotante = true;" },
+    @{ Nombre = "flotar no le saca el auto-oculto"
+       De = "        u.AutoOculto = false;`n        u.Flotante = true;"; A = "        u.Flotante = true;" },
+    @{ Nombre = "flotar un flotante cerrado lo vuelve a mostrar"
+       De = 'out var u) || u.Flotante) return;'; A = 'out var u)) return;' },
+    @{ Nombre = "acoplar no lo saca de su ventana"
+       De = "        u.Flotante = false;`n        u.Visible = true;"; A = "        u.Visible = true;" },
+    @{ Nombre = "acoplado no distingue al flotante"
+       De = '=> !u.AutoOculto && !u.Flotante;'; A = '=> !u.AutoOculto;' },
+    @{ Nombre = "auto-ocultar un flotante lo cambia"
+       De = 'out var u) || u.AutoOculto || u.Flotante) return;'; A = 'out var u) || u.AutoOculto) return;' },
+    @{ Nombre = "limites sin tamano minimo"
+       De = 'Ancho = Math.Max(TamanoMinimo, ancho),'; A = 'Ancho = ancho,' },
+    @{ Nombre = "no olvida limites imposibles"
+       De = '                u.LimitesFlotante = null;'; A = '' },
+    @{ Nombre = "flotante y auto-oculto a la vez"
+       De = '            if (u.Flotante) u.AutoOculto = false;'; A = '' }
 )
 
 $original = [IO.File]::ReadAllBytes($archivo)

@@ -18,6 +18,11 @@ namespace AsmEditor;
 /// La chincheta (3c del plan), como en VS: acoplado se ve vertical («fijo»)
 /// y al apretarla el panel se repliega al borde; replegado se ve acostada y
 /// al apretarla vuelve a su zona.
+///
+/// Flotar (3d): arrastrar la barra de título más allá de la tolerancia de
+/// Windows avisa <see cref="ArrastreIniciado"/>; el doble clic, o «Flotante» /
+/// «Acoplar» del ▾, avisan <see cref="FlotarPedido"/> o
+/// <see cref="AcoplarPedido"/>. Flotando no tiene chincheta (como en VS).
 /// </summary>
 public partial class VentanaHerramienta : UserControl
 {
@@ -35,9 +40,28 @@ public partial class VentanaHerramienta : UserControl
     private Control? _contenido;
     private bool _activa;
     private bool _autoOculta;
+    private bool _flotante;
+
+    // El arrastre de la barra de título: dónde se apretó (en pantalla).
+    private bool _apretado;
+    private Point _puntoApretado;
+
+    // Distancia entre botones de la barra (del diseñador): para correr el ▾
+    // al lugar de la chincheta cuando flota. Se miden desde la ✕, que siempre
+    // se ve: un control oculto no se reacomoda con su Anchor.
+    private readonly int _pasoBotones;
 
     /// <summary>✕ o «Ocultar» del menú del panel.</summary>
     public event EventHandler? OcultarPedido;
+
+    /// <summary>Se arrastró la barra de título (punto en pantalla, con el botón todavía apretado).</summary>
+    public event EventHandler<Point>? ArrastreIniciado;
+
+    /// <summary>Doble clic en el título acoplado, o «Flotante» del menú.</summary>
+    public event EventHandler? FlotarPedido;
+
+    /// <summary>Doble clic en el título flotando, o «Acoplar» del menú.</summary>
+    public event EventHandler? AcoplarPedido;
 
     /// <summary>La chincheta (o «Ocultar automáticamente»): replegar o volver a acoplar.</summary>
     public event EventHandler? ChinchetaPedida;
@@ -48,6 +72,7 @@ public partial class VentanaHerramienta : UserControl
     public VentanaHerramienta()
     {
         InitializeComponent();
+        _pasoBotones = btnCerrar.Left - btnChincheta.Left;
 
         btnMenu.Text = GlifoMenu;
         btnCerrar.Text = GlifoCerrar;
@@ -131,6 +156,38 @@ public partial class VentanaHerramienta : UserControl
     }
 
     /// <summary>
+    /// Dónde se apretó el título (en pantalla) en el último arrastre. El
+    /// anfitrión corre la flotante lo que el ratón ya avanzó hasta pasar la
+    /// tolerancia: si no, la ventana queda atrasada respecto del puntero.
+    /// </summary>
+    [Browsable(false)]
+    public Point PuntoApretado => _puntoApretado;
+
+    /// <summary>
+    /// En una ventana flotante (lo pone el anfitrión): sin chincheta, el ▾ en
+    /// su lugar, y el menú ofrece «Acoplar» en vez de «Flotante».
+    /// </summary>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public bool Flotante
+    {
+        get => _flotante;
+        set
+        {
+            if (_flotante == value) return;
+            _flotante = value;
+
+            btnChincheta.Visible = !value;
+            btnChincheta.Left = btnCerrar.Left - _pasoBotones;
+            btnMenu.Left = btnCerrar.Left - _pasoBotones * (value ? 1 : 2);
+
+            miFlotante.Visible = !value;
+            miAcoplar.Visible = value;
+            miAutoOcultar.Visible = !value;
+        }
+    }
+
+    /// <summary>
     /// El menú ▾ está abierto. Lo mira el anfitrión para no plegar un panel
     /// desplegado mientras se elige algo del menú (el menú queda fuera del
     /// panel, y el ratón también).
@@ -164,8 +221,47 @@ public partial class VentanaHerramienta : UserControl
 
     private void VentanaHerramienta_Leave(object? sender, EventArgs e) => Activa = false;
 
-    /// <summary>Un clic en la barra de título lleva el foco al contenido, como en VS.</summary>
-    private void Titulo_MouseDown(object? sender, MouseEventArgs e) => Enfocar();
+    /// <summary>Un clic en la barra de título lleva el foco al contenido, como en VS; con el izquierdo, puede empezar un arrastre.</summary>
+    private void Titulo_MouseDown(object? sender, MouseEventArgs e)
+    {
+        Enfocar();
+        if (e.Button != MouseButtons.Left) return;
+        _apretado = true;
+        _puntoApretado = Control.MousePosition;
+    }
+
+    /// <summary>
+    /// Pasada la tolerancia de arrastre de Windows (la misma del lienzo del
+    /// diseñador), avisa: un temblor al hacer clic no saca el panel.
+    /// </summary>
+    private void Titulo_MouseMove(object? sender, MouseEventArgs e)
+    {
+        if (!_apretado) return;
+        if ((Control.MouseButtons & MouseButtons.Left) == 0) { _apretado = false; return; }
+
+        var t = SystemInformation.DragSize;
+        var p = Control.MousePosition;
+        if (Math.Abs(p.X - _puntoApretado.X) <= t.Width / 2 && Math.Abs(p.Y - _puntoApretado.Y) <= t.Height / 2) return;
+
+        _apretado = false;
+        ArrastreIniciado?.Invoke(this, p);
+    }
+
+    private void Titulo_MouseUp(object? sender, MouseEventArgs e) => _apretado = false;
+
+    /// <summary>Doble clic en el título, como en VS: acoplado flota; flotando se acopla.</summary>
+    private void Titulo_MouseDoubleClick(object? sender, MouseEventArgs e)
+    {
+        if (e.Button != MouseButtons.Left) return;
+        _apretado = false;
+
+        if (_flotante) AcoplarPedido?.Invoke(this, EventArgs.Empty);
+        else FlotarPedido?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void miFlotante_Click(object? sender, EventArgs e) => FlotarPedido?.Invoke(this, EventArgs.Empty);
+
+    private void miAcoplar_Click(object? sender, EventArgs e) => AcoplarPedido?.Invoke(this, EventArgs.Empty);
 
     private void btnMenu_Click(object? sender, EventArgs e) =>
         cmsVentana.Show(btnMenu, new Point(0, btnMenu.Height));
@@ -201,6 +297,8 @@ public partial class VentanaHerramienta : UserControl
         }
 
         cmsVentana.BackColor = Tema.Superficie2;
+        miFlotante.ForeColor = Tema.Texto;
+        miAcoplar.ForeColor = Tema.Texto;
         miAutoOcultar.ForeColor = Tema.Texto;
         miOcultar.ForeColor = Tema.Texto;
     }

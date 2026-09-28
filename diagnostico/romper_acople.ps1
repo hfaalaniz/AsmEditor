@@ -6,13 +6,14 @@
 # SECCION que cubre ese defecto tenga un MAL. Restaura cada fuente byte por
 # byte (finally) y recompila el original.
 #
-# -Solo "texto": corre solo los defectos cuyo nombre lo contiene (para
-# repetir uno sin esperar los ~25 minutos de todos).
+# -Solo "texto","otro": corre solo los defectos cuyo nombre contiene alguno
+# (para repetir unos pocos sin esperar los ~25 minutos de todos).
+# -Seccion "H.": solo los de esa seccion de acople.ps1.
 #
 # Es para que lo lea yo, no forma parte de la interfaz.
 # ============================================================================
 
-param([string]$Solo = "")
+param([string[]]$Solo = @(), [string]$Seccion = "")
 
 $ErrorActionPreference = "Stop"
 
@@ -68,11 +69,47 @@ $defectos = @(
     @{ Nombre = "la chincheta del auto-oculto no lo fija"; Seccion = "F."; Archivo = "Acople\AnfitrionAcople.cs"
        De = '            Diseno.Fijar(v.Id);'; A = '            Diseno.AutoOcultar(v.Id);' },
     @{ Nombre = "sin franja abajo"; Seccion = "G."; Archivo = "Acople\AnfitrionAcople.cs"
-       De = 'borde.Visible = pestanas.Count > 0;'; A = 'borde.Visible = pestanas.Count > 0 && z != ZonaAcople.Abajo;' }
+       De = 'borde.Visible = pestanas.Count > 0;'; A = 'borde.Visible = pestanas.Count > 0 && z != ZonaAcople.Abajo;' },
+
+    # ---- Flotar (3d) ----
+    # NO VAN (equivalentes hoy, documentados el 28/09):
+    #  - la excepcion de Alt+F4 en VentanaFlotante.ProcessCmdKey: el menu
+    #    principal no tiene Alt+F4; importaria si algun dia "Salir" lo tuviera.
+    #  - Soltar() en VentanaFlotante_FormClosed: solo llega cerrando el editor,
+    #    cuando el panel ya no se usa (Cerrar() suelta antes en los demas casos).
+    #  - ActivarFlotante en Mostrar: con enfocar, la rama siguiente le da el
+    #    foco al panel y eso activa su ventana; sin enfocar (Ctrl+B con la
+    #    flotante cerrada) la ventana es nueva y Show la activa. Medido.
+    #  - FindForm().Activate() en AcoplarPanel: cerrar la flotante activa ya
+    #    le devuelve la activacion al editor, y v.Enfocar() hace el resto.
+    #    Medido (y "acoplar no le da el foco al panel" SI se detecta).
+    @{ Nombre = "doble clic no flota"; Seccion = "H."; Archivo = "Acople\VentanaHerramienta.cs"
+       De = '        else FlotarPedido?.Invoke(this, EventArgs.Empty);'; A = '' },
+    @{ Nombre = "la flotante con titulo nativo"; Seccion = "H."; Archivo = "Acople\VentanaFlotante.cs"
+       De = '                p.rgrc0.top = arriba;'; A = '' },
+    @{ Nombre = "chincheta flotando"; Seccion = "H."; Archivo = "Acople\VentanaHerramienta.cs"
+       De = 'btnChincheta.Visible = !value;'; A = 'btnChincheta.Visible = true;' },
+    @{ Nombre = "sin reenvio de atajos"; Seccion = "H."; Archivo = "Acople\VentanaFlotante.cs"
+       De = 'return pareceAtajo && Owner is IAtajosDelEditor editor && editor.EjecutarAtajo(keyData);'; A = 'return false;' },
+    @{ Nombre = "Ctrl+B con foco en la flotante no vuelve al editor"; Seccion = "H."; Archivo = "Acople\AnfitrionAcople.cs"
+       De = 'if (_flotantes.TryGetValue(id, out var f) && f.ContainsFocus) FindForm()?.Activate();'; A = 'if (false && _flotantes.TryGetValue(id, out var f) && f.ContainsFocus) FindForm()?.Activate();' },
+    @{ Nombre = "Alt+F4 cierra la flotante de verdad"; Seccion = "H."; Archivo = "Acople\VentanaFlotante.cs"
+       De = "        e.Cancel = true;`n        CierrePedido?.Invoke(this, EventArgs.Empty);"; A = "" },
+    @{ Nombre = "no recuerda donde quedo"; Seccion = "H."; Archivo = "Acople\AnfitrionAcople.cs"
+       De = '        Diseno.GuardarLimites(v.Id, f.Left, f.Top, f.Width, f.Height);'; A = '' },
+    @{ Nombre = "el arrastre de la flotante queda atrasado"; Seccion = "H."; Archivo = "Acople\AnfitrionAcople.cs"
+       De = 'movida.Left + enPantalla.X - v.PuntoApretado.X,'; A = 'movida.Left,' },
+    @{ Nombre = "sacar arrastrando no la pone bajo el raton"; Seccion = "H."; Archivo = "Acople\AnfitrionAcople.cs"
+       De = 'new Point(p.X - tamano.Width / 2, p.Y - 4 - 13)'; A = 'new Point(p.X - tamano.Width / 2, p.Y + 200)' },
+    @{ Nombre = "acoplar no le da el foco al panel"; Seccion = "H."; Archivo = "Acople\AnfitrionAcople.cs"
+       De = "        FindForm()?.Activate();`n        v.Enfocar();"; A = "        FindForm()?.Activate();" },
+    @{ Nombre = "cerrar el editor esconde el panel"; Seccion = "H."; Archivo = "Acople\VentanaFlotante.cs"
+       De = 'if (_cerrandoDesdeAnfitrion || e.CloseReason != CloseReason.UserClosing) return;'; A = 'if (_cerrandoDesdeAnfitrion) return;' }
 )
 
-if ($Solo) { $defectos = @($defectos | Where-Object { $_.Nombre -like "*$Solo*" }) }
-if ($defectos.Count -eq 0) { throw "Ningun defecto coincide con '$Solo'." }
+if ($Solo) { $defectos = @($defectos | Where-Object { $n = $_.Nombre; @($Solo | Where-Object { $n -like "*$_*" }).Count -gt 0 }) }
+if ($Seccion) { $defectos = @($defectos | Where-Object { $_.Seccion -eq $Seccion }) }
+if ($defectos.Count -eq 0) { throw "Ningun defecto coincide con '$Solo' / '$Seccion'." }
 
 function Compilar {
     $antes = if (Test-Path $dll) { (Get-Item $dll).LastWriteTime } else { [datetime]::MinValue }

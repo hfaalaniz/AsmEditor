@@ -24,6 +24,12 @@ namespace AsmEditor;
 /// PLIEGA cuando el ratón se va y el foco no está adentro. Un clic lo
 /// despliega al instante y con el foco. Solo hay uno desplegado a la vez.
 ///
+/// Flotar (3d): arrastrar el título de un panel, hacerle doble clic, o
+/// «Flotante» del ▾, lo pasa a una <see cref="VentanaFlotante"/> propia (una
+/// por panel, del editor). Doble clic en el título flotando, o «Acoplar», lo
+/// vuelve a su zona. Las flotantes se abren y se cierran en
+/// <see cref="Actualizar"/>, según el modelo, como todo lo demás.
+///
 /// ⚠ EXCEPCIÓN A LA REGLA DEL DISEÑADOR ("Dock solo para cabecera y pie"): las
 /// zonas, los divisores, el centro y lo que va dentro de cada zona usan Dock.
 /// Un Splitter no funciona sin Dock, y las zonas tienen que redimensionarse con
@@ -45,6 +51,12 @@ public partial class AnfitrionAcople : UserControl
 
     /// <summary>El que se va a desplegar cuando venza tmrDesplegar (el ratón sigue en su pestaña).</summary>
     private string? _porDesplegar;
+
+    /// <summary>Las ventanas de los flotantes abiertos, por Id de panel.</summary>
+    private readonly Dictionary<string, VentanaFlotante> _flotantes = new();
+
+    /// <summary>Tamaño de una flotante que nunca se vio (ancho y alto de ventana).</summary>
+    private static readonly Size TamanoFlotanteNuevo = new(300, 400);
 
     /// <summary>El diseño cambió (se mostró, ocultó o activó un panel, o se movió un divisor).</summary>
     public event EventHandler? DisenoCambiado;
@@ -94,6 +106,9 @@ public partial class AnfitrionAcople : UserControl
         v.RendererMenus = _rendererMenus;
         v.OcultarPedido += Ventana_OcultarPedido;
         v.ChinchetaPedida += Ventana_ChinchetaPedida;
+        v.ArrastreIniciado += Ventana_ArrastreIniciado;
+        v.FlotarPedido += Ventana_FlotarPedido;
+        v.AcoplarPedido += Ventana_AcoplarPedido;
         v.Activada += Ventana_Activada;
 
         Actualizar();
@@ -119,7 +134,8 @@ public partial class AnfitrionAcople : UserControl
     ///
     /// Si está auto-oculto, como en VS: lo DESPLIEGA desde el borde y le da el
     /// foco siempre (desplegado sin foco se plegaría apenas el ratón no esté
-    /// encima, y pedir un panel para que no se vea no sirve).
+    /// encima, y pedir un panel para que no se vea no sirve). Si está
+    /// flotante, trae su ventana al frente, también con el foco.
     /// </summary>
     public void Mostrar(string id, bool enfocar = false)
     {
@@ -127,6 +143,7 @@ public partial class AnfitrionAcople : UserControl
         Actualizar();
 
         if (Diseno.EstaAutoOculto(id)) Desplegar(id, enfocar: true);
+        else if (Diseno.EstaFlotante(id)) ActivarFlotante(id);
         else if (enfocar && _ventanas.TryGetValue(id, out var v)) v.Enfocar();
 
         Avisar();
@@ -181,10 +198,18 @@ public partial class AnfitrionAcople : UserControl
     /// Ctrl+B y el menú Ver. Acoplado: lo oculta si se ve; si no, lo muestra.
     /// Auto-oculto (decisión de Fabián, 28/09: como VS): NO lo cierra; lo
     /// despliega con el foco, y si ya estaba desplegado lo pliega.
+    /// Flotante (decisión de Fabián, 28/09): tampoco lo cierra; trae su
+    /// ventana al frente con el foco, y si ya lo tenía el foco vuelve al
+    /// editor (la ventana queda abierta).
     /// </summary>
     public void Alternar(string id)
     {
         if (!EstaVisible(id)) Mostrar(id);
+        else if (Diseno.EstaFlotante(id))
+        {
+            if (_flotantes.TryGetValue(id, out var f) && f.ContainsFocus) FindForm()?.Activate();
+            else ActivarFlotante(id);
+        }
         else if (!Diseno.EstaAutoOculto(id)) Ocultar(id);
         else if (_desplegado == id) Plegar();
         else Desplegar(id, enfocar: true);
@@ -206,9 +231,22 @@ public partial class AnfitrionAcople : UserControl
         if (_desplegado is not null && !(Diseno.EstaVisible(_desplegado) && Diseno.EstaAutoOculto(_desplegado)))
             Plegar();
 
+        // Lo mismo con las flotantes que ya no van (se acoplaron o se cerraron):
+        // se cierran soltando el panel, que va a su zona o queda oculto.
+        foreach (var id in _flotantes.Keys.Where(id => !(Diseno.EstaVisible(id) && Diseno.EstaFlotante(id))).ToList())
+        {
+            var f = _flotantes[id];
+            _flotantes.Remove(id);
+            if (!f.IsDisposed) f.Cerrar();
+        }
+
         SuspendLayout();
 
-        foreach (var (id, v) in _ventanas) v.AutoOculta = Diseno.EstaAutoOculto(id);
+        foreach (var (id, v) in _ventanas)
+        {
+            v.AutoOculta = Diseno.EstaAutoOculto(id);
+            v.Flotante = Diseno.EstaFlotante(id);
+        }
 
         foreach (var z in Enum.GetValues<ZonaAcople>())
         {
@@ -235,6 +273,105 @@ public partial class AnfitrionAcople : UserControl
         ResumeLayout();
 
         if (_desplegado is not null) UbicarDesplegado();
+        AbrirFlotantes();
+    }
+
+    /// <summary>
+    /// Una ventana por flotante visible que todavía no la tenga, donde quedó
+    /// la última vez. Sin el formulario del editor ya creado no se puede (sin
+    /// dueño quedaría suelta): se abren en el próximo Actualizar.
+    /// </summary>
+    private void AbrirFlotantes()
+    {
+        var duenio = FindForm();
+        if (duenio is null || !duenio.IsHandleCreated) return;
+
+        foreach (var id in Diseno.FlotantesVisibles())
+        {
+            if (_flotantes.ContainsKey(id) || !_ventanas.TryGetValue(id, out var v)) continue;
+
+            var f = new VentanaFlotante();
+            f.CierrePedido += Flotante_CierrePedido;
+            f.Movida += Flotante_Movida;
+            f.Contener(v);
+            f.Bounds = LimitesEnPantalla(id, duenio);
+            _flotantes[id] = f;
+            f.Show(duenio);
+        }
+    }
+
+    /// <summary>
+    /// Dónde va su ventana: donde quedó, o centrada en el editor si nunca se
+    /// vio o si ya no la muestra ninguna pantalla (se desconectó un monitor).
+    /// </summary>
+    private Rectangle LimitesEnPantalla(string id, Form duenio)
+    {
+        var centrada = new Rectangle(
+            duenio.Left + (duenio.Width - TamanoFlotanteNuevo.Width) / 2,
+            duenio.Top + (duenio.Height - TamanoFlotanteNuevo.Height) / 2,
+            TamanoFlotanteNuevo.Width, TamanoFlotanteNuevo.Height);
+
+        if (Diseno.LimitesDe(id) is not { } l) return centrada;
+
+        var r = new Rectangle(l.X, l.Y, l.Ancho, l.Alto);
+        return Screen.AllScreens.Any(s => s.WorkingArea.IntersectsWith(r)) ? r : centrada;
+    }
+
+    /// <summary>
+    /// Lo pasa a su ventana. Con <paramref name="bajoElRaton"/> (se arrastró el
+    /// título), la ventana aparece con su título bajo el ratón, lista para
+    /// que Windows siga el arrastre; si no, donde estaba el panel (o donde
+    /// flotó la última vez).
+    /// </summary>
+    private void FlotarPanel(string id, Point? bajoElRaton)
+    {
+        if (!_ventanas.TryGetValue(id, out var v) || Diseno.EstaFlotante(id)) return;
+
+        var aLaVista = v.Parent is not null && v.Visible && v.IsHandleCreated
+            ? v.RectangleToScreen(v.ClientRectangle)
+            : Rectangle.Empty;
+        var previo = Diseno.LimitesDe(id);
+
+        var tamano = previo is not null ? new Size(previo.Ancho, previo.Alto)
+            : !aLaVista.IsEmpty ? aLaVista.Size
+            : TamanoFlotanteNuevo;
+
+        // El ratón a mitad del ancho y a mitad de la barra del panel (26 px,
+        // debajo de la franja de 4 px que redimensiona). Sin ninguna
+        // referencia queda null y la centra LimitesEnPantalla.
+        Point? lugar = bajoElRaton is { } p ? new Point(p.X - tamano.Width / 2, p.Y - 4 - 13)
+            : previo is not null ? new Point(previo.X, previo.Y)
+            : !aLaVista.IsEmpty ? aLaVista.Location
+            : null;
+
+        Diseno.Flotar(id);
+        if (lugar is { } l) Diseno.GuardarLimites(id, l.X, l.Y, tamano.Width, tamano.Height);
+
+        Actualizar();
+        Avisar();
+    }
+
+    /// <summary>Lo vuelve de su ventana a su zona, activo y con el foco.</summary>
+    private void AcoplarPanel(string id)
+    {
+        if (!_ventanas.TryGetValue(id, out var v)) return;
+
+        Diseno.Acoplar(id);
+        Actualizar();
+
+        // La flotante (la activa) se cerró: la ventana del editor vuelve a ser
+        // la activa y el foco va al panel, ya en su zona.
+        FindForm()?.Activate();
+        v.Enfocar();
+        Avisar();
+    }
+
+    /// <summary>Su ventana al frente, con el foco en el panel.</summary>
+    private void ActivarFlotante(string id)
+    {
+        if (!_flotantes.TryGetValue(id, out var f)) return;
+        f.Activate();
+        f.Panel?.Enfocar();
     }
 
     /// <summary>Las franjas de los bordes: las pestañas de los auto-ocultos de cada lado.</summary>
@@ -428,6 +565,57 @@ public partial class AnfitrionAcople : UserControl
         if (_desplegado is not null) UbicarDesplegado();
     }
 
+    /// <summary>
+    /// Se arrastró el título. Acoplado (o desplegado): pasa a su ventana bajo
+    /// el ratón. Flotando: se mueve su ventana. En los dos casos el arrastre
+    /// sigue con Windows, con el botón todavía apretado.
+    /// </summary>
+    private void Ventana_ArrastreIniciado(object? sender, Point enPantalla)
+    {
+        if (sender is not VentanaHerramienta v) return;
+
+        if (!Diseno.EstaFlotante(v.Id)) FlotarPanel(v.Id, enPantalla);   // ya la ubica bajo el ratón
+        else if (_flotantes.TryGetValue(v.Id, out var movida))
+        {
+            // Lo que el ratón avanzó hasta pasar la tolerancia: Windows sigue
+            // desde acá, y sin esto la ventana queda atrasada ese tramo
+            // (medido el 28/09 con acople.ps1: 110 de 120 px).
+            movida.Location = new Point(
+                movida.Left + enPantalla.X - v.PuntoApretado.X,
+                movida.Top + enPantalla.Y - v.PuntoApretado.Y);
+        }
+
+        if (_flotantes.TryGetValue(v.Id, out var f)) f.EmpezarArrastre();
+    }
+
+    /// <summary>Doble clic en el título acoplado, o «Flotante»: a su ventana, con el foco.</summary>
+    private void Ventana_FlotarPedido(object? sender, EventArgs e)
+    {
+        if (sender is not VentanaHerramienta v) return;
+        FlotarPanel(v.Id, null);
+        ActivarFlotante(v.Id);
+    }
+
+    /// <summary>Doble clic en el título flotando, o «Acoplar».</summary>
+    private void Ventana_AcoplarPedido(object? sender, EventArgs e)
+    {
+        if (sender is VentanaHerramienta v) AcoplarPanel(v.Id);
+    }
+
+    /// <summary>Alt+F4 en una flotante: se oculta como con la ✕ (vuelve flotante desde Ver).</summary>
+    private void Flotante_CierrePedido(object? sender, EventArgs e)
+    {
+        if (sender is VentanaFlotante { Panel: { } v }) Ocultar(v.Id);
+    }
+
+    /// <summary>Terminó de moverse o de cambiar de tamaño: se anota dónde quedó.</summary>
+    private void Flotante_Movida(object? sender, EventArgs e)
+    {
+        if (sender is not VentanaFlotante { Panel: { } v } f) return;
+        Diseno.GuardarLimites(v.Id, f.Left, f.Top, f.Width, f.Height);
+        Avisar();
+    }
+
     /// <summary>El foco entró a un panel: queda como el activo de su zona (no cambia nada visible).</summary>
     private void Ventana_Activada(object? sender, EventArgs e)
     {
@@ -500,5 +688,10 @@ public partial class AnfitrionAcople : UserControl
         pnlDesplegado.BackColor = Tema.LineaSuave;
     }
 
-    private void AnfitrionAcople_Disposed(object? sender, EventArgs e) => Tema.TemaCambiado -= AplicarTema;
+    private void AnfitrionAcople_Disposed(object? sender, EventArgs e)
+    {
+        Tema.TemaCambiado -= AplicarTema;
+        foreach (var f in _flotantes.Values.Where(f => !f.IsDisposed)) f.Cerrar();
+        _flotantes.Clear();
+    }
 }

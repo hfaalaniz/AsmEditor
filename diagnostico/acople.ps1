@@ -17,6 +17,14 @@
 #      Ctrl+B lo despliega y lo pliega (no lo cierra); la chincheta lo fija.
 #   G. Auto-ocultar abajo: la lista de errores pasa a una pestana horizontal
 #      en el borde de abajo, se despliega con clic y se fija con la chincheta.
+#   H. Flotar (3d) el explorador: doble clic en el titulo lo pasa a su ventana
+#      (sin titulo nativo, sin chincheta, con el foco); Ctrl+B desde ella
+#      (atajo reenviado) devuelve el foco al editor y otra vez la trae; la X
+#      y Alt+F4 la ocultan y Ctrl+B la trae donde estaba; arrastrar su titulo
+#      la mueve y se recuerda; doble clic la acopla; arrastrar el titulo
+#      acoplado la saca bajo el raton; "Acoplar" del menu la devuelve; y
+#      cerrar el editor con una flotante: cancelar no pierde el panel, salir
+#      termina limpio.
 #
 # Editor AISLADO y teclas/clics PROTEGIDOS. Solo se leen textos de ventanas
 # DEL EDITOR (AC.Titulo lo exige). Guarda acople_*.png para mirarlas yo.
@@ -99,6 +107,55 @@ public static class AC {
     }
 
     public static RECT Rect(IntPtr h) { RECT r; GetWindowRect(h, out r); return r; }
+
+    [DllImport("user32.dll")] public static extern bool IsWindowEnabled(IntPtr h);
+    [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr h);
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct GUITHREADINFO {
+        public int cbSize, flags;
+        public IntPtr hwndActive, hwndFocus, hwndCapture, hwndMenuOwner, hwndMoveSize, hwndCaret;
+        public RECT rcCaret;
+    }
+    [DllImport("user32.dll")] static extern bool GetGUIThreadInfo(uint hilo, ref GUITHREADINFO info);
+
+    // Estado del hilo de la ventana: si esta en el bucle de mover/redimensionar
+    // (GUI_INMOVESIZE) y quien tiene la captura del raton.
+    public static string EstadoHilo(IntPtr ventana) {
+        uint pid; uint hilo = GetWindowThreadProcessId(ventana, out pid);
+        var i = new GUITHREADINFO(); i.cbSize = Marshal.SizeOf(typeof(GUITHREADINFO));
+        if (!GetGUIThreadInfo(hilo, ref i)) return "(sin datos)";
+        return "moviendo=" + ((i.flags & 0x2) != 0) + " captura=" + (i.hwndCapture == IntPtr.Zero ? "nadie" : Clase(i.hwndCapture).Replace("WindowsForms10.", "").Split('.')[0]);
+    }
+    [DllImport("user32.dll")] static extern bool PostMessage(IntPtr h, int m, IntPtr w, IntPtr l);
+
+    // Doble clic SOLO si el punto es de una ventana del proceso.
+    public static bool DobleClic(uint pid, int x, int y) {
+        POINT p; p.X = x; p.Y = y;
+        if (Pid(GetAncestor(WindowFromPoint(p), 2)) != pid) return false;
+        SetCursorPos(x, y); System.Threading.Thread.Sleep(120);
+        mouse_event(0x02, 0, 0, 0, IntPtr.Zero); mouse_event(0x04, 0, 0, 0, IntPtr.Zero);
+        System.Threading.Thread.Sleep(60);
+        mouse_event(0x02, 0, 0, 0, IntPtr.Zero); mouse_event(0x04, 0, 0, 0, IntPtr.Zero);
+        System.Threading.Thread.Sleep(300);
+        return true;
+    }
+
+    // Un control hijo visible con ese texto (cualquier clase), SOLO del proceso.
+    public static IntPtr Hijo(IntPtr raiz, string texto) {
+        IntPtr hallado = IntPtr.Zero; uint pid = Pid(raiz);
+        EnumChildWindows(raiz, delegate(IntPtr h, IntPtr p) {
+            if (IsWindowVisible(h) && Titulo(h, pid) == texto) { hallado = h; return false; }
+            return true;
+        }, IntPtr.Zero);
+        return hallado;
+    }
+
+    // Pide cerrar (como la X) SOLO una ventana del proceso.
+    public static bool PedirCierre(uint pid, IntPtr h) {
+        if (Pid(h) != pid) return false;
+        return PostMessage(h, 0x0010, IntPtr.Zero, IntPtr.Zero);
+    }
 
     // Mueve el raton (sin clic) SOLO si el punto es de una ventana del
     // proceso. En dos pasos, para que el control reciba el movimiento.
@@ -242,6 +299,37 @@ function MoverRaton($p, $x, $y) {
 }
 
 function FocoEnElIDE($ide) { return ([AC]::Foco($ide)).EndsWith("[dentro del IDE]") }
+
+# La ventana flotante de un panel: ventana del proceso, con el titulo del
+# panel, que no es el IDE. Zero si no esta.
+function Flotante($p, $ide, $titulo) {
+    return (Buscar $p { param($h, $t) $t -eq $titulo -and $h -ne $ide })
+}
+
+function Doble($p, $h) {
+    $c = Centro $h
+    if ([AC]::DobleClic([uint32]$p.Id, $c[0], $c[1])) { return $true }
+    AvisoProteccion "el punto ($($c[0]),$($c[1])) no es del editor: NO se hace doble clic"
+    return $false
+}
+
+# El boton del menu (v) de un panel: el primero de la fila de su titulo.
+function BotonesDelTitulo($ventana, $etiquetaTitulo) {
+    $rt = [AC]::Rect($etiquetaTitulo)
+    $y = [int](($rt.Top + $rt.Bottom) / 2)
+    return @([AC]::Botones($ventana) | ForEach-Object { [AC]::Rect($_) } |
+        Where-Object { $_.Top -le $y -and $_.Bottom -ge $y -and $_.Left -ge $rt.Right -and $_.Left -le $rt.Right + 80 } |
+        Sort-Object Left)
+}
+
+# Elige la PRIMERA opcion visible del menu (v) de un panel.
+function PrimeraDelMenu($p, $ventana, $etiquetaTitulo) {
+    $b = BotonesDelTitulo $ventana $etiquetaTitulo
+    if ($b.Count -lt 2) { Mal "no encuentro el menu del panel"; return $false }
+    if (-not (ClicProtegido $p ([int](($b[0].Left + $b[0].Right) / 2)) ([int](($b[0].Top + $b[0].Bottom) / 2)))) { return $false }
+    Start-Sleep -Milliseconds 400
+    return (TeclasProtegidas $p "{DOWN}{ENTER}" 800)
+}
 
 # ---------------------------------------------------------------------------
 Titulo "Preparando"
@@ -492,6 +580,180 @@ try {
         }
         [AC]::Capturar($ide, (Join-Path $PSScriptRoot "acople_fin_3c.png"))
     } else { Mal "no se pudo poner la lista de errores al frente" }
+
+    # -----------------------------------------------------------------------
+    Titulo "H. Flotar el explorador"
+
+    $exp = Etiquetas $ide "Explorador"
+    if ($exp.Count -eq 1) {
+        [void](TraerAlFrente $p $ide)
+
+        # Doble clic en el titulo acoplado: a su ventana.
+        [void](Doble $p $exp[0])
+        $flot = Esperar $p { param($h, $t) $t -eq "Explorador" -and $h -ne $ide } 5
+        if ($flot -ne [IntPtr]::Zero) { Bien "doble clic en el titulo: el explorador paso a su ventana" } else { Mal "doble clic en el titulo: no aparecio la ventana flotante" }
+        if ((Etiquetas $ide "Explorador").Count -eq 0) { Bien "ya no esta en el IDE" } else { Mal "sigue en el IDE" }
+    } else { $flot = [IntPtr]::Zero; Mal "no esta el explorador acoplado para flotarlo" }
+
+    if ($flot -ne [IntPtr]::Zero) {
+        $tituloFlot = @(Etiquetas $flot "Explorador")
+        $rf = [AC]::Rect($flot)
+        if ($tituloFlot.Count -eq 1 -and (([AC]::Rect($tituloFlot[0])).Top - $rf.Top) -le 10) { Bien "sin titulo nativo: la barra del panel esta arriba de todo" } else { Mal "la barra del panel no esta arriba (titulo nativo?)" }
+        if ($tituloFlot.Count -eq 1 -and (BotonesDelTitulo $flot $tituloFlot[0]).Count -eq 2) { Bien "flotando no tiene chincheta (menu y X)" } else { Mal "botones en la barra flotante: $(if ($tituloFlot.Count -eq 1) { (BotonesDelTitulo $flot $tituloFlot[0]).Count } else { '?' })" }
+        Write-Host "    rastro foco en la flotante: $([AC]::Foco($flot))" -ForegroundColor DarkGray
+        if (([AC]::Foco($flot)).EndsWith("[dentro del IDE]")) { Bien "la flotante tiene el foco" } else { Mal "la flotante no tiene el foco" }
+        [AC]::Capturar($flot, (Join-Path $PSScriptRoot "acople_flotante.png"))
+
+        # Ctrl+B con el foco en la flotante: llega al menu (reenviado) y el foco vuelve al editor.
+        [void](TeclasProtegidas $p "^b" 900)
+        if ((FocoEnElIDE $ide) -and (Flotante $p $ide "Explorador") -ne [IntPtr]::Zero) { Bien "Ctrl+B desde la flotante (atajo reenviado): el foco vuelve al editor, la ventana queda" } else { Mal "Ctrl+B desde la flotante: foco en el IDE $(FocoEnElIDE $ide), flotante $((Flotante $p $ide 'Explorador') -ne [IntPtr]::Zero)" }
+        [void](TeclasProtegidas $p "^b" 900)
+        if ([ProteccionUI]::GetForegroundWindow() -eq $flot) { Bien "Ctrl+B otra vez: la flotante al frente" } else { Mal "Ctrl+B otra vez: la flotante no quedo al frente" }
+
+        # La X la oculta; Ctrl+B la trae donde estaba.
+        $antes = [AC]::Rect($flot)
+        $hAntesX = $flot
+        [void](CerrarPanel $p $flot (@(Etiquetas $flot "Explorador"))[0])
+        Start-Sleep -Milliseconds 600
+        Write-Host "    rastro tras la X: la ventana $hAntesX existe $([AC]::IsWindow($hAntesX)), visible $([AC]::IsWindowVisible($hAntesX))" -ForegroundColor DarkGray
+        if ((Flotante $p $ide "Explorador") -eq [IntPtr]::Zero) { Bien "la X de la flotante la oculta" } else { Mal "la X no oculto la flotante" }
+        if (FocoEnElIDE $ide) { Bien "tras la X, el foco esta en el editor" } else { Mal "tras la X, el foco quedo FUERA del editor" }
+        [void](TraerAlFrente $p $ide)
+        [void](TeclasProtegidas $p "^b" 900)
+        $flot = Flotante $p $ide "Explorador"
+        $r = if ($flot -ne [IntPtr]::Zero) { [AC]::Rect($flot) } else { $null }
+        if ($r -and [Math]::Abs($r.Left - $antes.Left) -le 2 -and [Math]::Abs($r.Top - $antes.Top) -le 2) { Bien "Ctrl+B la trajo flotante, donde estaba" } else { Mal "Ctrl+B no la trajo donde estaba" }
+
+        # Alt+F4 la oculta sin cerrar el editor. SOLO con la flotante al
+        # frente: con la ventana principal al frente cerraria el editor.
+        if ($flot -ne [IntPtr]::Zero -and [ProteccionUI]::GetForegroundWindow() -ne $flot) {
+            Mal "la flotante no esta al frente: no se manda Alt+F4"
+        } elseif ($flot -ne [IntPtr]::Zero) {
+            [void](TeclasProtegidas $p "%{F4}" 900)
+            if ((Flotante $p $ide "Explorador") -eq [IntPtr]::Zero -and -not $p.HasExited -and (Buscar $p { param($h, $t) $h -eq $ide }) -ne [IntPtr]::Zero) { Bien "Alt+F4 oculta la flotante (el editor sigue abierto)" } else { Mal "Alt+F4: flotante $((Flotante $p $ide 'Explorador') -ne [IntPtr]::Zero), editor cerrado $($p.HasExited)" }
+            [void](TraerAlFrente $p $ide)
+            [void](TeclasProtegidas $p "^b" 900)
+            $flot = Flotante $p $ide "Explorador"
+        }
+
+        # Arrastrar su titulo la mueve, y el lugar se recuerda.
+        # OJO: HACIA LA IZQUIERDA: la flotante nace donde estaba el explorador,
+        # pegada al borde derecho; corrida a la derecha su X quedaba FUERA de
+        # la pantalla y el clic (que Windows recorta al borde) no la cerraba.
+        # Parecia un defecto del editor y era de la prueba (28/09).
+        if ($flot -ne [IntPtr]::Zero) {
+            $t = (@(Etiquetas $flot "Explorador"))[0]
+            $c = Centro $t
+            $antes = [AC]::Rect($flot)
+            if ([AC]::Arrastrar([uint32]$p.Id, $c[0], $c[1], $c[0] - 120, $c[1] + 70)) {
+                Write-Host "    rastro hilo tras arrastrar la flotante: $([AC]::EstadoHilo($flot))" -ForegroundColor DarkGray
+                $r = [AC]::Rect($flot)
+                if ([Math]::Abs(($r.Left - $antes.Left) + 120) -le 6 -and [Math]::Abs(($r.Top - $antes.Top) - 70) -le 6) { Bien "arrastrar su titulo la movio ($($r.Left - $antes.Left), +$($r.Top - $antes.Top))" } else { Mal "arrastrar su titulo: se movio ($($r.Left - $antes.Left), $($r.Top - $antes.Top)), esperaba (-120, 70)" }
+                $hArrastrada = $flot
+                $xOk = CerrarPanel $p $flot (@(Etiquetas $flot "Explorador"))[0]
+                Start-Sleep -Milliseconds 500
+                # Sin esto, si la X no llegaba, Ctrl+B traia al frente la MISMA
+                # ventana y "vuelve donde se la dejo" pasaba sin probar nada
+                # (romper_acople, 28/09: mismo handle antes y despues).
+                Write-Host "    rastro X tras arrastrar: clic hecho $xOk, la ventana existe $([AC]::IsWindow($hArrastrada)), visible $([AC]::IsWindowVisible($hArrastrada)), $(if ([AC]::IsWindow($hArrastrada)) { [AC]::EstadoHilo($hArrastrada) }), foco $([AC]::Foco($hArrastrada))" -ForegroundColor DarkGray
+                if (-not [AC]::IsWindow($hArrastrada)) { Bien "la X tras arrastrar la cerro" } else { Mal "la X tras arrastrar NO la cerro" }
+                [void](TraerAlFrente $p $ide)
+                [void](TeclasProtegidas $p "^b" 900)
+                $flot = Flotante $p $ide "Explorador"
+                $r2 = if ($flot -ne [IntPtr]::Zero) { [AC]::Rect($flot) } else { $null }
+                Write-Host "    rastro posicion: antes ($($antes.Left),$($antes.Top))  arrastrada ($($r.Left),$($r.Top))  reabierta $(if ($r2) { "($($r2.Left),$($r2.Top))" } else { '-' })  handle $hArrastrada -> $flot" -ForegroundColor DarkGray
+                if ($r2 -and [Math]::Abs($r2.Left - $r.Left) -le 2 -and [Math]::Abs($r2.Top - $r.Top) -le 2) { Bien "ocultarla y traerla: vuelve donde se la dejo" } else { Mal "ocultarla y traerla: no volvio donde se la dejo" }
+            } else { AvisoProteccion "el titulo no es del editor o no esta al frente: no se arrastra"; Mal "no se pudo arrastrar la flotante" }
+        }
+
+        # Doble clic en su titulo: se acopla.
+        if ($flot -ne [IntPtr]::Zero) {
+            [void](Doble $p (@(Etiquetas $flot "Explorador"))[0])
+            Start-Sleep -Milliseconds 500
+            $exp = Etiquetas $ide "Explorador"
+            if ((Flotante $p $ide "Explorador") -eq [IntPtr]::Zero -and $exp.Count -eq 1 -and (Centro $exp[0])[0] -gt $medio) { Bien "doble clic en la flotante: se acoplo a la derecha" } else { Mal "doble clic en la flotante: no se acoplo" }
+            # En el PANEL, no solo en el editor: cerrar la flotante activa ya
+            # devuelve el foco al editor (a lo que lo tenia antes), y eso solo
+            # no prueba que se le dio al panel (romper_acople, 28/09).
+            $foco = [AC]::Foco($ide)
+            Write-Host "    rastro foco tras acoplar: $foco" -ForegroundColor DarkGray
+            if ($foco.StartsWith("SysTreeView32") -and $foco.EndsWith("[dentro del IDE]")) { Bien "acoplada, el foco esta en el explorador" } else { Mal "acoplada, el foco no esta en el explorador" }
+        }
+    }
+
+    # Arrastrar el titulo acoplado la saca bajo el raton; "Acoplar" del menu la devuelve.
+    $exp = Etiquetas $ide "Explorador"
+    if ($exp.Count -eq 1) {
+        [void](TraerAlFrente $p $ide)
+        $c = Centro $exp[0]
+        $destino = @([int]($c[0] - 400), [int]($c[1] + 120))
+        if ([AC]::Arrastrar([uint32]$p.Id, $c[0], $c[1], $destino[0], $destino[1])) {
+            $flot = Esperar $p { param($h, $t) $t -eq "Explorador" -and $h -ne $ide } 3
+            $tf = if ($flot -ne [IntPtr]::Zero) { @(Etiquetas $flot "Explorador") } else { @() }
+            if ($tf.Count -eq 1 -and [Math]::Abs((Centro $tf[0])[1] - $destino[1]) -le 25 -and [Math]::Abs((Centro $flot)[0] - $destino[0]) -le 40) { Bien "arrastrar el titulo acoplado la saco, con su titulo bajo el raton" } else { Mal "arrastrar el titulo acoplado: flotante $($flot -ne [IntPtr]::Zero)" }
+            [AC]::Capturar($ide, (Join-Path $PSScriptRoot "acople_arrastrada.png"))
+
+            if ($tf.Count -eq 1) {
+                [void](PrimeraDelMenu $p $flot $tf[0])
+                Start-Sleep -Milliseconds 500
+                $exp = Etiquetas $ide "Explorador"
+                if ((Flotante $p $ide "Explorador") -eq [IntPtr]::Zero -and $exp.Count -eq 1) { Bien "'Acoplar' del menu la devolvio a su zona" } else { Mal "'Acoplar' del menu no la devolvio" }
+            }
+        } else { AvisoProteccion "el titulo no es del editor o no esta al frente: no se arrastra"; Mal "no se pudo arrastrar el titulo acoplado" }
+    }
+
+    # Los contadores de la barra de estado con la lista FLOTANTE y el editor
+    # al frente: la traen al frente con el foco (Mostrar sobre una flotante
+    # ya abierta: la ventana no se recrea, hay que activarla).
+    $err = Etiquetas $ide "Lista de errores"
+    if ($err.Count -eq 1) { [void](Clic $p $err[0]); Start-Sleep -Milliseconds 500; $err = Etiquetas $ide "Lista de errores" }
+    if ($err.Count -eq 2) {
+        [void](TraerAlFrente $p $ide)
+        [void](Doble $p $err[0])
+        $flotErr = Esperar $p { param($h, $t) $t -eq "Lista de errores" -and $h -ne $ide } 5
+        [void](TraerAlFrente $p $ide)
+        # El contador de errores: la primera etiqueta "0" de la barra de estado (abajo de todo).
+        $contador = @(Etiquetas $ide "0" | Where-Object { ([AC]::Rect($_)).Top -gt $rv.Bottom - 40 } | Sort-Object { ([AC]::Rect($_)).Left })
+        if ($flotErr -ne [IntPtr]::Zero -and $contador.Count -ge 1 -and [ProteccionUI]::GetForegroundWindow() -eq $ide) {
+            [void](Clic $p $contador[0])
+            Start-Sleep -Milliseconds 700
+            if ([ProteccionUI]::GetForegroundWindow() -eq $flotErr -and ([AC]::Foco($flotErr)).EndsWith("[dentro del IDE]")) { Bien "el contador de errores trajo la lista flotante al frente, con el foco" } else { Mal "el contador de errores no trajo la lista flotante al frente" }
+            [void](Doble $p (@(Etiquetas $flotErr "Lista de errores"))[0])
+            Start-Sleep -Milliseconds 500
+        } else { Mal "no se pudo preparar la lista flotante con el editor al frente (flotante $($flotErr -ne [IntPtr]::Zero), contadores $($contador.Count))" }
+        if ((Flotante $p $ide "Lista de errores") -eq [IntPtr]::Zero) { Bien "la lista volvio a su zona" } else { Mal "la lista quedo flotando" }
+    } else { Mal "no se pudo poner la lista de errores al frente para flotarla" }
+
+    # Cerrar el editor con una flotante abierta.
+    $exp = Etiquetas $ide "Explorador"
+    if ($exp.Count -eq 1) {
+        [void](TraerAlFrente $p $ide)
+        [void](Doble $p $exp[0])
+        $flot = Esperar $p { param($h, $t) $t -eq "Explorador" -and $h -ne $ide } 5
+        [void](TraerAlFrente $p $ide)
+
+        [void][AC]::PedirCierre([uint32]$p.Id, $ide)
+        Start-Sleep -Milliseconds 900
+        if (-not [AC]::IsWindowEnabled($ide)) { Bien "cerrar el editor pregunta (dialogo de salida)" } else { Mal "cerrar el editor no mostro el dialogo de salida" }
+        [void](TeclasProtegidas $p "{ESC}" 900)
+        $flot = Flotante $p $ide "Explorador"
+        $tf = if ($flot -ne [IntPtr]::Zero) { @(Etiquetas $flot "Explorador") } else { @() }
+        if (-not $p.HasExited -and $tf.Count -eq 1) { Bien "cancelar la salida: la flotante sigue, con el panel adentro" } else { Mal "cancelar la salida: flotante $($flot -ne [IntPtr]::Zero), panel $($tf.Count), editor cerrado $($p.HasExited)" }
+
+        # OJO: Enter NO sale: el foco del dialogo esta en "Cancelar" (el primer
+        # boton) y un boton con el foco gana sobre el AcceptButton. Es asi
+        # tambien sin flotantes (cierre_con_flotante.ps1 -SinFlotante, 28/09).
+        # Se hace clic en "Salir".
+        [void](TraerAlFrente $p $ide)
+        [void][AC]::PedirCierre([uint32]$p.Id, $ide)
+        Start-Sleep -Milliseconds 900
+        $dialogo = Buscar $p { param($h, $t) $h -ne $ide -and $t -eq "" }
+        $salir = if ($dialogo -ne [IntPtr]::Zero) { [AC]::Hijo($dialogo, "Salir") } else { [IntPtr]::Zero }
+        if ($salir -ne [IntPtr]::Zero) { [void](Clic $p $salir) } else { Mal "no encuentro el boton Salir del dialogo" }
+        if ($p.WaitForExit(10000)) {
+            if ($p.ExitCode -eq 0) { Bien "salir con la flotante abierta: el editor termino limpio (codigo 0)" } else { Mal "salir con la flotante abierta: codigo $($p.ExitCode)" }
+        } else { Mal "salir con la flotante abierta: el editor NO termino (un error?)"; [AC]::Capturar($ide, (Join-Path $PSScriptRoot "acople_no_cerro.png")) }
+    } else { Mal "no esta el explorador acoplado para probar el cierre" }
 } finally {
     CerrarEditorAislado
 }

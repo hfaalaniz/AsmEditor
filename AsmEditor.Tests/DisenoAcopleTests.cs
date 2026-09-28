@@ -331,6 +331,202 @@ public class DisenoAcopleTests
         Assert.Equal(new[] { "consola" }, d.AutoOcultosEn(ZonaAcople.Abajo));
     }
 
+    /// <summary>
+    /// Mostrar un acoplado lo deja activo. Antes de la 3d esto solo lo cubría
+    /// de rebote una prueba de Mover (que llamaba a Mostrar): al pasar Mover a
+    /// Acoplar quedó sin cubrir (romper_diseno_acople, 28/09).
+    /// </summary>
+    [Fact]
+    public void Mostrar_UnAcoplado_LoDejaActivo()
+    {
+        var d = DeFabrica();
+        d.Ocultar("salida");
+        d.Activar("errores");
+
+        d.Mostrar("salida");
+
+        Assert.Equal("salida", d.ActivoEn(ZonaAcople.Abajo));
+    }
+
+    // ---------------- Flotar (3d) ----------------
+
+    [Fact]
+    public void Flotar_LoSacaDeLaZona_YQuedaVisible()
+    {
+        var d = DeFabrica();
+
+        d.Flotar("explorador");
+
+        Assert.Empty(d.VisiblesEn(ZonaAcople.Derecha));
+        Assert.Empty(d.AutoOcultosEn(ZonaAcople.Derecha));
+        Assert.False(d.ZonaVisible(ZonaAcople.Derecha));
+        Assert.Equal(new[] { "explorador" }, d.FlotantesVisibles());
+        Assert.True(d.EstaVisible("explorador"));
+        Assert.True(d.EstaFlotante("explorador"));
+        Assert.Equal(ZonaAcople.Derecha, d.ZonaDe("explorador"));   // adonde vuelve
+    }
+
+    [Fact]
+    public void Flotar_ElActivo_PasaALaVecina()
+    {
+        var d = DeFabrica();                       // abajo: errores, salida
+        d.Registrar("pila", ZonaAcople.Abajo);     //        pila
+        d.Activar("salida");
+
+        d.Flotar("salida");
+
+        Assert.Equal("pila", d.ActivoEn(ZonaAcople.Abajo));
+        Assert.Equal(new[] { "errores", "pila" }, d.VisiblesEn(ZonaAcople.Abajo));
+    }
+
+    [Fact]
+    public void Acoplar_UnFlotante_VuelveASuLugarActivo()
+    {
+        var d = DeFabrica();
+        d.Flotar("errores");
+        d.Activar("salida");    // si no, «errores» sería el activo solo por ser el primero
+
+        d.Acoplar("errores");
+
+        Assert.Equal(new[] { "errores", "salida" }, d.VisiblesEn(ZonaAcople.Abajo));
+        Assert.Equal("errores", d.ActivoEn(ZonaAcople.Abajo));
+        Assert.Empty(d.FlotantesVisibles());
+        Assert.False(d.EstaFlotante("errores"));
+    }
+
+    /// <summary>Como en VS: un auto-oculto que flota deja de serlo, y al acoplarlo vuelve fijo.</summary>
+    [Fact]
+    public void Flotar_UnAutoOculto_DejaDeSerAutoOculto()
+    {
+        var d = DeFabrica();
+        d.AutoOcultar("explorador");
+
+        d.Flotar("explorador");
+        Assert.False(d.EstaAutoOculto("explorador"));
+        Assert.Empty(d.AutoOcultosEn(ZonaAcople.Derecha));
+
+        d.Acoplar("explorador");
+        Assert.Equal(new[] { "explorador" }, d.VisiblesEn(ZonaAcople.Derecha));
+    }
+
+    [Fact]
+    public void OcultarYMostrar_UnFlotante_VuelveFlotante()
+    {
+        var d = DeFabrica();
+        d.Flotar("explorador");
+
+        d.Ocultar("explorador");
+        Assert.Empty(d.FlotantesVisibles());
+        Assert.False(d.EstaVisible("explorador"));
+
+        d.Mostrar("explorador");
+        Assert.Equal(new[] { "explorador" }, d.FlotantesVisibles());
+        Assert.Empty(d.VisiblesEn(ZonaAcople.Derecha));
+    }
+
+    /// <summary>Darle el foco a un flotante no le cambia el activo a su zona.</summary>
+    [Fact]
+    public void Activar_UnFlotante_NoTocaElActivoDeLaZona()
+    {
+        var d = DeFabrica();                       // abajo: errores, salida
+        d.Registrar("pila", ZonaAcople.Abajo);     //        pila
+        d.Registrar("consola", ZonaAcople.Abajo);  //        consola
+        d.Flotar("consola");
+        d.Activar("salida");
+
+        d.Activar("consola");
+        d.Ocultar("salida");
+
+        // Anotado «consola», al ocultar «salida» no se buscaría la vecina.
+        Assert.Equal("pila", d.ActivoEn(ZonaAcople.Abajo));
+    }
+
+    /// <summary>Mostrar un flotante (vuelve a su ventana) no le cambia el activo a su zona.</summary>
+    [Fact]
+    public void Mostrar_UnFlotante_NoTocaElActivoDeLaZona()
+    {
+        var d = DeFabrica();                       // abajo: errores, salida
+        d.Registrar("pila", ZonaAcople.Abajo);     //        pila
+        d.Registrar("consola", ZonaAcople.Abajo);  //        consola
+        d.Flotar("consola");
+        d.Ocultar("consola");
+        d.Activar("salida");
+
+        d.Mostrar("consola");
+        d.Ocultar("salida");
+
+        Assert.Equal("pila", d.ActivoEn(ZonaAcople.Abajo));
+        Assert.Equal(new[] { "consola" }, d.FlotantesVisibles());
+    }
+
+    /// <summary>Un flotante no tiene chincheta: auto-ocultarlo no lo cambia.</summary>
+    [Fact]
+    public void AutoOcultar_UnFlotante_NoLoCambia()
+    {
+        var d = DeFabrica();
+        d.Flotar("explorador");
+
+        d.AutoOcultar("explorador");
+
+        Assert.True(d.EstaFlotante("explorador"));
+        Assert.False(d.EstaAutoOculto("explorador"));
+        Assert.Empty(d.AutoOcultosEn(ZonaAcople.Derecha));
+    }
+
+    [Fact]
+    public void Flotar_DosVeces_NoCambiaNada()
+    {
+        var d = DeFabrica();
+        d.Flotar("errores");
+        d.Ocultar("errores");
+
+        d.Flotar("errores");
+
+        Assert.False(d.EstaVisible("errores"));   // seguía cerrado: mostrarlo es cosa de Mostrar
+        Assert.Empty(d.FlotantesVisibles());
+    }
+
+    [Fact]
+    public void Mover_UnFlotante_LoAcopla()
+    {
+        var d = DeFabrica();
+        d.Flotar("explorador");
+
+        d.Mover("explorador", ZonaAcople.Izquierda);
+
+        Assert.Equal(new[] { "explorador" }, d.VisiblesEn(ZonaAcople.Izquierda));
+        Assert.False(d.EstaFlotante("explorador"));
+    }
+
+    [Fact]
+    public void GuardarLimites_RespetaElTamanoMinimo()
+    {
+        var d = DeFabrica();
+
+        d.GuardarLimites("explorador", -1500, 40, 30, 500);
+
+        var l = d.LimitesDe("explorador")!;
+        Assert.Equal(-1500, l.X);                       // otro monitor, a la izquierda: vale
+        Assert.Equal(40, l.Y);
+        Assert.Equal(DisenoAcople.TamanoMinimo, l.Ancho);
+        Assert.Equal(500, l.Alto);
+    }
+
+    [Fact]
+    public void EnsureValid_OlvidaLimitesImposibles_YFlotanteManda()
+    {
+        var d = DeFabrica();
+        d.Paneles["explorador"].Flotante = true;
+        d.Paneles["explorador"].AutoOculto = true;
+        d.Paneles["explorador"].LimitesFlotante = new LimitesVentana { X = 0, Y = 0, Ancho = 0, Alto = 300 };
+
+        d.EnsureValid();
+
+        Assert.Null(d.LimitesDe("explorador"));
+        Assert.False(d.EstaAutoOculto("explorador"));
+        Assert.True(d.EstaFlotante("explorador"));
+    }
+
     // ---------------- Tamaños ----------------
 
     [Fact]
@@ -360,10 +556,16 @@ public class DisenoAcopleTests
         d.FijarTamano(ZonaAcople.Derecha, 333);
         d.Ocultar("explorador");
         d.AutoOcultar("errores");
+        d.Registrar("pila", ZonaAcople.Izquierda);
+        d.Flotar("pila");
+        d.GuardarLimites("pila", 100, 200, 300, 400);
 
         var leido = JsonSerializer.Deserialize<DisenoAcople>(JsonSerializer.Serialize(d))!;
         leido.EnsureValid();
 
+        Assert.True(leido.EstaFlotante("pila"));
+        var l = leido.LimitesDe("pila")!;
+        Assert.Equal((100, 200, 300, 400), (l.X, l.Y, l.Ancho, l.Alto));
         Assert.True(leido.EstaAutoOculto("errores"));
         Assert.Equal("salida", leido.ActivoEn(ZonaAcople.Abajo));
         Assert.Equal(333, leido.TamanoDe(ZonaAcople.Derecha, 280));

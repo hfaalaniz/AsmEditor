@@ -25,6 +25,8 @@ namespace AsmEditor
             this.btnCerrar = new System.Windows.Forms.Button();
             this.pnlContenido = new System.Windows.Forms.Panel();
             this.cmsVentana = new System.Windows.Forms.ContextMenuStrip(this.components);
+            this.miFlotante = new System.Windows.Forms.ToolStripMenuItem();
+            this.miAcoplar = new System.Windows.Forms.ToolStripMenuItem();
             this.miAutoOcultar = new System.Windows.Forms.ToolStripMenuItem();
             this.miOcultar = new System.Windows.Forms.ToolStripMenuItem();
             this.pnlTitulo.SuspendLayout();
@@ -43,6 +45,9 @@ namespace AsmEditor
             this.pnlTitulo.Size = new System.Drawing.Size(260, 26);
             this.pnlTitulo.TabIndex = 0;
             this.pnlTitulo.MouseDown += new System.Windows.Forms.MouseEventHandler(this.Titulo_MouseDown);
+            this.pnlTitulo.MouseMove += new System.Windows.Forms.MouseEventHandler(this.Titulo_MouseMove);
+            this.pnlTitulo.MouseUp += new System.Windows.Forms.MouseEventHandler(this.Titulo_MouseUp);
+            this.pnlTitulo.MouseDoubleClick += new System.Windows.Forms.MouseEventHandler(this.Titulo_MouseDoubleClick);
             //
             // lblTitulo
             //
@@ -56,6 +61,9 @@ namespace AsmEditor
             this.lblTitulo.Text = "Herramienta";
             this.lblTitulo.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
             this.lblTitulo.MouseDown += new System.Windows.Forms.MouseEventHandler(this.Titulo_MouseDown);
+            this.lblTitulo.MouseMove += new System.Windows.Forms.MouseEventHandler(this.Titulo_MouseMove);
+            this.lblTitulo.MouseUp += new System.Windows.Forms.MouseEventHandler(this.Titulo_MouseUp);
+            this.lblTitulo.MouseDoubleClick += new System.Windows.Forms.MouseEventHandler(this.Titulo_MouseDoubleClick);
             //
             // btnMenu
             //
@@ -112,10 +120,27 @@ namespace AsmEditor
             // cmsVentana
             //
             this.cmsVentana.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.miFlotante,
+            this.miAcoplar,
             this.miAutoOcultar,
             this.miOcultar});
             this.cmsVentana.Name = "cmsVentana";
-            this.cmsVentana.Size = new System.Drawing.Size(200, 48);
+            this.cmsVentana.Size = new System.Drawing.Size(200, 92);
+            //
+            // miFlotante
+            //
+            this.miFlotante.Name = "miFlotante";
+            this.miFlotante.Size = new System.Drawing.Size(199, 22);
+            this.miFlotante.Text = "Flotante";
+            this.miFlotante.Click += new System.EventHandler(this.miFlotante_Click);
+            //
+            // miAcoplar
+            //
+            this.miAcoplar.Name = "miAcoplar";
+            this.miAcoplar.Size = new System.Drawing.Size(199, 22);
+            this.miAcoplar.Text = "Acoplar";
+            this.miAcoplar.Visible = false;
+            this.miAcoplar.Click += new System.EventHandler(this.miAcoplar_Click);
             //
             // miAutoOcultar
             //
@@ -155,6 +180,8 @@ namespace AsmEditor
         private System.Windows.Forms.Button btnCerrar;
         private System.Windows.Forms.Panel pnlContenido;
         private System.Windows.Forms.ContextMenuStrip cmsVentana;
+        private System.Windows.Forms.ToolStripMenuItem miFlotante;
+        private System.Windows.Forms.ToolStripMenuItem miAcoplar;
         private System.Windows.Forms.ToolStripMenuItem miAutoOcultar;
         private System.Windows.Forms.ToolStripMenuItem miOcultar;
     }

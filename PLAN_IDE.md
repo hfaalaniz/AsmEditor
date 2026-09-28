@@ -281,8 +281,31 @@ compartían la zona de abajo, y sin pestañas una quedaba inaccesible.
   Los dos `romper_*` quedaron desactualizados por la reforma del modelo
   del 23/09 (un texto a romper ya no existía y otro rompía OTRO método):
   ahora exigen que cada texto aparezca **exactamente una vez**.
-- [ ] **3d · Flotar:** arrastrar la barra de título fuera de la zona lo
-  convierte en ventana flotante; doble clic lo vuelve a acoplar.
+- [x] **3d · Flotar** *(28/09)*: arrastrar la barra de título (pasada la
+  tolerancia `DragSize`), el doble clic o ▾ → «Flotante» pasan el panel a su
+  `VentanaFlotante` (una por panel, del editor: encima de él, se minimiza
+  con él, fuera de la barra de tareas). Doble clic en su título o ▾ →
+  «Acoplar» lo devuelven a su zona. La ✕ y Alt+F4 la ocultan; desde Ver
+  vuelve flotante, donde quedó. Técnica del prototipo 0.4: el arrastre se le
+  entrega a Windows (`WM_NCLBUTTONDOWN` + `HTCAPTION`).
+  ⚠ Decisiones de Fabián: **aspecto como VS**, marco nativo SIN la franja
+  del título (la técnica de la ventana principal) y la barra del panel hace
+  de título; **Ctrl+B / Ver sobre una flotante no la cierra**: la trae con
+  el foco, y si ya lo tenía el foco vuelve al editor.
+  ⚠ **Los atajos desde la flotante** se reenvían a la principal
+  (`IAtajosDelEditor`), solo los que parecen atajo (Ctrl/Alt o F) y nunca
+  Alt+F4.
+  ⚠ **Cerrar el editor con una flotante**: Windows le avisa a la flotante
+  ANTES de que el editor pregunte por los archivos; ahí no se toca nada, el
+  panel se suelta recién en `FormClosed`. Medido: cancelar la salida no
+  pierde el panel y salir termina con código 0 (`cierre_con_flotante.ps1`).
+  ⚠ Al mover la flotante por su título, lo que el ratón avanzó hasta pasar
+  la tolerancia se perdía (110 de 120 px): se compensa antes de entregarle
+  el arrastre a Windows.
+  Previo, corregido con OK de Fabián (28/09): en el diálogo de salida
+  **Enter cancelaba** (el foco arrancaba en «Cancelar», que le gana al
+  `AcceptButton` «Salir»). Ahora el foco arranca en el botón por defecto.
+  `diagnostico\dialogo_salida.ps1` (4/4), verificado quitando el arreglo.
 - [ ] **3e · Acoplar arrastrando:** guías de acople (rombo central y guías de
   borde) con vista previa translúcida.
 - [ ] **3f · Diseño persistente:** se guarda y se restaura; «Ventana →
@@ -336,6 +359,7 @@ compartían la zona de abajo, y sin pestañas una quedaba inaccesible.
 | 23/09/2026 | 1 | ver log | Ventana Configuración → Opciones (reemplaza a «Rutas de herramientas»). 431 pruebas unitarias (5 nuevas, verificadas con `romper_valores_opciones.ps1`, incluida una opción nueva sin conectar). `opciones.ps1` por interfaz, verificada con `romper_opciones.ps1` (6 defectos). `ventana_inicio` y `probar_barras` en verde. |
 | 23/09/2026 | 3a+3b | ver log | Acople en el editor: explorador a la derecha, Lista de errores · Salida abajo con pestañas, ✕ / Ver / Ctrl+B, divisores. 449 pruebas unitarias (18 del modelo, verificadas con `romper_diseno_acople.ps1`, 8 defectos). `acople.ps1` por interfaz, verificada con `romper_acople.ps1` (7 defectos). Corregido: el foco quedaba en la ✕ oculta y morían los atajos. Los 8 diagnósticos por interfaz en verde. |
 | 28/09/2026 | 3c | ver log | Auto-ocultar (chincheta). 459 pruebas unitarias; `romper_diseno_acople.ps1` 17/17 (5 no se detectaban: 4 pruebas corregidas o nuevas y 1 defecto equivalente, documentado). `acople.ps1` secciones F (explorador) y G (abajo), con capturas `acople_desplegado.png` y `acople_abajo_desplegado.png`; `romper_acople.ps1` 17/17 (7 viejos + 10 de la 3c; nuevo `-Solo` para repetir uno). El resguardo de foco de `Plegar` no es medible (WinForms ya devuelve el foco en el único camino que llega con foco): queda, documentado en `romper_acople.ps1`. |
+| 28/09/2026 | 3d | ver log | Flotar. 472 pruebas unitarias; `romper_diseno_acople.ps1` 27/27. `acople.ps1` sección H (flotar por doble clic, menú y arrastre; atajos reenviados; ✕ / Alt+F4 / Ctrl+B; acoplar; cerrar el editor con una flotante) y A–G en verde; `romper_acople.ps1 -Seccion H.` 11/11 (4 equivalentes medidos y documentados). Corregido en el camino: la flotante quedaba atrasada al arrastrarla. La prueba arrastraba la flotante FUERA de la pantalla y su ✕ no se alcanzaba: parecía un defecto del editor y era de la prueba. |
 
 ### Pendientes detectados en la Etapa 2 (no tocados)
 

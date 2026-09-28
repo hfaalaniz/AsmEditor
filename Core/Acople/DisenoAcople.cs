@@ -23,8 +23,30 @@ public sealed class UbicacionPanel
     /// </summary>
     public bool AutoOculto { get; set; }
 
+    /// <summary>
+    /// True = flotante (3d): no ocupa lugar en su zona; está en una ventana
+    /// aparte. La zona se conserva: es adonde vuelve al acoplarlo. Se conserva
+    /// al ocultarlo: vuelve flotante.
+    /// </summary>
+    public bool Flotante { get; set; }
+
+    /// <summary>Dónde estuvo la ventana flotante (en pantalla). Null = nunca flotó.</summary>
+    public LimitesVentana? LimitesFlotante { get; set; }
+
     /// <summary>Posición dentro de la zona: el orden de sus pestañas.</summary>
     public int Orden { get; set; }
+}
+
+/// <summary>
+/// Un rectángulo en pantalla, en píxeles. Propio y no System.Drawing.Rectangle:
+/// ese se serializa con propiedades de más (Location, Size, IsEmpty...).
+/// </summary>
+public sealed class LimitesVentana
+{
+    public int X { get; set; }
+    public int Y { get; set; }
+    public int Ancho { get; set; }
+    public int Alto { get; set; }
 }
 
 /// <summary>
@@ -71,7 +93,8 @@ public sealed class DisenoAcople
 
     /// <summary>
     /// Los paneles ACOPLADOS y visibles de la zona, en el orden de sus
-    /// pestañas. Los auto-ocultos no están acá: ver <see cref="AutoOcultosEn"/>.
+    /// pestañas. Los auto-ocultos y los flotantes no están acá: ver
+    /// <see cref="AutoOcultosEn"/> y <see cref="FlotantesVisibles"/>.
     /// </summary>
     public IReadOnlyList<string> VisiblesEn(ZonaAcople zona) =>
         EnZona(zona, autoOcultos: false);
@@ -82,10 +105,18 @@ public sealed class DisenoAcople
 
     private List<string> EnZona(ZonaAcople zona, bool autoOcultos) =>
         Paneles
-            .Where(p => p.Value.Zona == zona && p.Value.Visible && p.Value.AutoOculto == autoOcultos)
+            .Where(p => p.Value.Zona == zona && p.Value.Visible && !p.Value.Flotante && p.Value.AutoOculto == autoOcultos)
             .OrderBy(p => p.Value.Orden)
             .ThenBy(p => p.Key, StringComparer.Ordinal)
             .Select(p => p.Key)
+            .ToList();
+
+    /// <summary>Los flotantes visibles: cada uno, una ventana aparte.</summary>
+    public IReadOnlyList<string> FlotantesVisibles() =>
+        Paneles
+            .Where(p => p.Value.Visible && p.Value.Flotante)
+            .Select(p => p.Key)
+            .OrderBy(k => k, StringComparer.Ordinal)
             .ToList();
 
     /// <summary>Una zona sin paneles visibles no ocupa lugar.</summary>
@@ -108,50 +139,57 @@ public sealed class DisenoAcople
 
     public bool EstaAutoOculto(string id) => Paneles.TryGetValue(id, out var u) && u.AutoOculto;
 
+    public bool EstaFlotante(string id) => Paneles.TryGetValue(id, out var u) && u.Flotante;
+
     public ZonaAcople? ZonaDe(string id) => Paneles.TryGetValue(id, out var u) ? u.Zona : null;
+
+    /// <summary>Acoplado = en su zona, ni auto-oculto ni flotante (se vea o no).</summary>
+    private static bool Acoplado(UbicacionPanel u) => !u.AutoOculto && !u.Flotante;
 
     /// <summary>
     /// Lo deja como la pestaña activa de su zona (sin cambiar si se ve).
     ///
-    /// ⚠ Un auto-oculto NO: no está en la zona. Si no, al darle el foco
-    /// desplegado desde el borde se perdería cuál era el activo de verdad.
+    /// ⚠ Un auto-oculto o un flotante NO: no está en la zona. Si no, al darle
+    /// el foco (desplegado desde el borde, o en su ventana) se perdería cuál
+    /// era el activo de verdad.
     /// </summary>
     public void Activar(string id)
     {
-        if (Paneles.TryGetValue(id, out var u) && !u.AutoOculto) Activos[u.Zona] = id;
+        if (Paneles.TryGetValue(id, out var u) && Acoplado(u)) Activos[u.Zona] = id;
     }
 
     /// <summary>
     /// Lo muestra en su lugar: acoplado (y activo en su zona) o, si estaba
-    /// auto-oculto, de nuevo con su pestaña en el borde.
+    /// auto-oculto o flotante, de nuevo así.
     /// </summary>
     public void Mostrar(string id)
     {
         if (!Paneles.TryGetValue(id, out var u)) return;
         u.Visible = true;
-        if (!u.AutoOculto) Activos[u.Zona] = id;
+        if (Acoplado(u)) Activos[u.Zona] = id;
     }
 
     /// <summary>
-    /// Lo oculta. Conserva la zona, el orden y si estaba auto-oculto: al
-    /// mostrarlo vuelve a su lugar. Si era el activo, la zona pasa a la
-    /// pestaña vecina (ver ActivoEn).
+    /// Lo oculta. Conserva la zona, el orden y si estaba auto-oculto o
+    /// flotante: al mostrarlo vuelve a su lugar. Si era el activo, la zona
+    /// pasa a la pestaña vecina (ver ActivoEn).
     /// </summary>
     public void Ocultar(string id)
     {
         if (!Paneles.TryGetValue(id, out var u)) return;
 
-        if (u.Visible && !u.AutoOculto) SoltarActivo(u.Zona, id);
+        if (u.Visible && Acoplado(u)) SoltarActivo(u.Zona, id);
         u.Visible = false;
     }
 
     /// <summary>
     /// La chincheta, al acoplado: lo repliega a una pestaña en el borde de su
     /// lado. Deja de ocupar lugar en la zona (la vecina pasa a ser la activa).
+    /// Un flotante no tiene chincheta (como en VS): no cambia.
     /// </summary>
     public void AutoOcultar(string id)
     {
-        if (!Paneles.TryGetValue(id, out var u) || u.AutoOculto) return;
+        if (!Paneles.TryGetValue(id, out var u) || u.AutoOculto || u.Flotante) return;
 
         if (u.Visible) SoltarActivo(u.Zona, id);
         u.AutoOculto = true;
@@ -159,18 +197,57 @@ public sealed class DisenoAcople
     }
 
     /// <summary>La chincheta, al auto-oculto: lo vuelve a acoplar en su zona, activo.</summary>
-    public void Fijar(string id)
+    public void Fijar(string id) => Acoplar(id);
+
+    /// <summary>
+    /// Lo saca de su zona a una ventana aparte (3d). Deja de ocupar lugar en
+    /// la zona (la vecina pasa a ser la activa); la zona se conserva para
+    /// volver. Un auto-oculto deja de serlo: al acoplarlo vuelve fijo, como
+    /// en VS.
+    /// </summary>
+    public void Flotar(string id)
+    {
+        if (!Paneles.TryGetValue(id, out var u) || u.Flotante) return;
+
+        if (u.Visible && !u.AutoOculto) SoltarActivo(u.Zona, id);
+        u.AutoOculto = false;
+        u.Flotante = true;
+        u.Visible = true;
+    }
+
+    /// <summary>
+    /// Lo vuelve a su zona, fijo (ni auto-oculto ni flotante), visible y
+    /// activo: la chincheta de un auto-oculto, o «Acoplar» de un flotante.
+    /// </summary>
+    public void Acoplar(string id)
     {
         if (!Paneles.TryGetValue(id, out var u)) return;
 
         u.AutoOculto = false;
+        u.Flotante = false;
         u.Visible = true;
         Activos[u.Zona] = id;
     }
 
+    /// <summary>Dónde quedó su ventana flotante (en pantalla), con el tamaño mínimo de una zona.</summary>
+    public void GuardarLimites(string id, int x, int y, int ancho, int alto)
+    {
+        if (!Paneles.TryGetValue(id, out var u)) return;
+
+        u.LimitesFlotante = new LimitesVentana
+        {
+            X = x,
+            Y = y,
+            Ancho = Math.Max(TamanoMinimo, ancho),
+            Alto = Math.Max(TamanoMinimo, alto)
+        };
+    }
+
+    public LimitesVentana? LimitesDe(string id) => Paneles.TryGetValue(id, out var u) ? u.LimitesFlotante : null;
+
     /// <summary>
     /// Lo pasa a otra zona, como última pestaña, ACOPLADO (aunque estuviera
-    /// auto-oculto), visible y activo.
+    /// auto-oculto o flotante), visible y activo.
     /// </summary>
     public void Mover(string id, ZonaAcople zona)
     {
@@ -183,8 +260,7 @@ public sealed class DisenoAcople
             u.Orden = SiguienteOrden(zona);
         }
 
-        u.AutoOculto = false;
-        Mostrar(id);
+        Acoplar(id);
     }
 
     /// <summary>
@@ -229,6 +305,14 @@ public sealed class DisenoAcople
         foreach (var u in Paneles.Values)
         {
             if (!Enum.IsDefined(u.Zona)) u.Zona = ZonaAcople.Derecha;
+
+            // Un tamaño imposible (a mano en settings.json): se olvida y la
+            // ventana flotante se vuelve a ubicar como la primera vez.
+            if (u.LimitesFlotante is { } l && (l.Ancho < TamanoMinimo || l.Alto < TamanoMinimo))
+                u.LimitesFlotante = null;
+
+            // Flotante y auto-oculto a la vez no existe: manda flotante.
+            if (u.Flotante) u.AutoOculto = false;
         }
 
         foreach (var z in Enum.GetValues<ZonaAcople>())

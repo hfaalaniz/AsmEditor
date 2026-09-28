@@ -8,7 +8,7 @@ using AsmEditor.Core.Proyecto;
 
 namespace AsmEditor;
 
-public class MainForm : Form
+public class MainForm : Form, IAtajosDelEditor
 {
     private readonly PestanasAsm _tabs = new();
     private readonly RichTextBox _output = new();
@@ -674,6 +674,19 @@ public class MainForm : Form
         }
 
         return base.ProcessCmdKey(ref msg, keyData);
+    }
+
+    /// <summary>
+    /// Un atajo que llegó a una ventana flotante del acople (ver
+    /// IAtajosDelEditor): se procesa como si se hubiera apretado acá. El
+    /// mensaje lleva el handle de ESTA ventana: el menú busca sus atajos entre
+    /// los de la ventana del mensaje.
+    /// </summary>
+    public bool EjecutarAtajo(Keys teclas)
+    {
+        const int WM_KEYDOWN = 0x0100;
+        var m = Message.Create(Handle, WM_KEYDOWN, (IntPtr)(int)(teclas & Keys.KeyCode), IntPtr.Zero);
+        return ProcessCmdKey(ref m, teclas);
     }
 
     [StructLayout(LayoutKind.Sequential)]

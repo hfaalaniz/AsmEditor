@@ -197,6 +197,12 @@ public sealed class DialogoSalida : Form
         }
 
         Controls.Add(panel);
+
+        // ⚠ EL FOCO ARRANCA EN EL BOTÓN POR DEFECTO. Si no, lo toma el primero
+        // que se agregó («Cancelar»), y un botón con el foco se queda con el
+        // Enter antes que el AcceptButton: Enter cancelaba la salida (medido
+        // el 28/09 con diagnostico\cierre_con_flotante.ps1 -SinFlotante).
+        ActiveControl = (Control)AcceptButton;
     }
 
     private enum Tipo { Normal, Principal, Peligro }
