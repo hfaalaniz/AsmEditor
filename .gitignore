@@ -24,3 +24,6 @@ diagnostico/**/*.exe
 diagnostico/**/*.obj
 diagnostico/**/*.dll
 diagnostico/**/*.pdb
+
+# ── Frame PIC: compilados de Rust ──────────────────────────────────────────
+FramePIC/target/

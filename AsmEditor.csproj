@@ -55,4 +55,14 @@
     <None Remove="diagnostico\**" />
   </ItemGroup>
 
+  <!--
+    FramePIC\ es otro proyecto (núcleo en Rust, ver FramePIC\CLAUDE.md) que
+    vive en este repo hasta integrarse en el editor. Queda fuera del barrido.
+  -->
+  <ItemGroup>
+    <Compile Remove="FramePIC\**" />
+    <EmbeddedResource Remove="FramePIC\**" />
+    <None Remove="FramePIC\**" />
+  </ItemGroup>
+
 </Project>
