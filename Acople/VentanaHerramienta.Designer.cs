@@ -25,6 +25,7 @@ namespace AsmEditor
             this.btnCerrar = new System.Windows.Forms.Button();
             this.pnlContenido = new System.Windows.Forms.Panel();
             this.cmsVentana = new System.Windows.Forms.ContextMenuStrip(this.components);
+            this.miAutoOcultar = new System.Windows.Forms.ToolStripMenuItem();
             this.miOcultar = new System.Windows.Forms.ToolStripMenuItem();
             this.pnlTitulo.SuspendLayout();
             this.cmsVentana.SuspendLayout();
@@ -82,7 +83,7 @@ namespace AsmEditor
             this.btnChincheta.TabIndex = 2;
             this.btnChincheta.TabStop = false;
             this.btnChincheta.UseVisualStyleBackColor = false;
-            this.btnChincheta.Visible = false;
+            this.btnChincheta.Click += new System.EventHandler(this.btnChincheta_Click);
             //
             // btnCerrar
             //
@@ -111,14 +112,22 @@ namespace AsmEditor
             // cmsVentana
             //
             this.cmsVentana.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.miAutoOcultar,
             this.miOcultar});
             this.cmsVentana.Name = "cmsVentana";
-            this.cmsVentana.Size = new System.Drawing.Size(120, 26);
+            this.cmsVentana.Size = new System.Drawing.Size(200, 48);
+            //
+            // miAutoOcultar
+            //
+            this.miAutoOcultar.Name = "miAutoOcultar";
+            this.miAutoOcultar.Size = new System.Drawing.Size(199, 22);
+            this.miAutoOcultar.Text = "Ocultar automáticamente";
+            this.miAutoOcultar.Click += new System.EventHandler(this.miAutoOcultar_Click);
             //
             // miOcultar
             //
             this.miOcultar.Name = "miOcultar";
-            this.miOcultar.Size = new System.Drawing.Size(119, 22);
+            this.miOcultar.Size = new System.Drawing.Size(199, 22);
             this.miOcultar.Text = "Ocultar";
             this.miOcultar.Click += new System.EventHandler(this.miOcultar_Click);
             //
@@ -146,6 +155,7 @@ namespace AsmEditor
         private System.Windows.Forms.Button btnCerrar;
         private System.Windows.Forms.Panel pnlContenido;
         private System.Windows.Forms.ContextMenuStrip cmsVentana;
+        private System.Windows.Forms.ToolStripMenuItem miAutoOcultar;
         private System.Windows.Forms.ToolStripMenuItem miOcultar;
     }
 }

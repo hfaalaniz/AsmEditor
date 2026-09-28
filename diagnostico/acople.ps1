@@ -10,6 +10,13 @@
 #   D. Una zona con un solo panel no muestra pestanas: X de la salida deja la
 #      lista sola; Ver > Salida (desde el buscador) la devuelve a su pestana.
 #   E. Divisor: arrastrar el borde del explorador cambia su ancho.
+#   F. Auto-ocultar (3c) el explorador: la chincheta lo pasa a una pestana
+#      vertical en el borde derecho (y el foco sigue en el IDE); el raton
+#      encima lo despliega y al irse se pliega; pasar rapido no despliega; el
+#      clic lo despliega con el foco y se queda hasta que el foco se va;
+#      Ctrl+B lo despliega y lo pliega (no lo cierra); la chincheta lo fija.
+#   G. Auto-ocultar abajo: la lista de errores pasa a una pestana horizontal
+#      en el borde de abajo, se despliega con clic y se fija con la chincheta.
 #
 # Editor AISLADO y teclas/clics PROTEGIDOS. Solo se leen textos de ventanas
 # DEL EDITOR (AC.Titulo lo exige). Guarda acople_*.png para mirarlas yo.
@@ -92,6 +99,16 @@ public static class AC {
     }
 
     public static RECT Rect(IntPtr h) { RECT r; GetWindowRect(h, out r); return r; }
+
+    // Mueve el raton (sin clic) SOLO si el punto es de una ventana del
+    // proceso. En dos pasos, para que el control reciba el movimiento.
+    public static bool Mover(uint pid, int x, int y) {
+        POINT p; p.X = x; p.Y = y;
+        if (Pid(GetAncestor(WindowFromPoint(p), 2)) != pid) return false;
+        SetCursorPos(x - 3, y); System.Threading.Thread.Sleep(60);
+        SetCursorPos(x, y); System.Threading.Thread.Sleep(60);
+        return true;
+    }
 
     [DllImport("user32.dll")] static extern IntPtr GetFocus();
     [DllImport("user32.dll")] static extern bool AttachThreadInput(uint a, uint b, bool unir);
@@ -196,6 +213,35 @@ function CerrarPanel($p, $ide, $etiquetaTitulo) {
     if ($x.Count -eq 0) { Mal "no encuentro la X del panel"; return $false }
     return (ClicProtegido $p ([int](($x[0].Left + $x[0].Right) / 2)) $y)
 }
+
+# La chincheta de un panel: en la fila de su titulo, la anteultima de
+# menu, chincheta, X.
+function Chincheta($p, $ide, $etiquetaTitulo) {
+    $rt = [AC]::Rect($etiquetaTitulo)
+    $y = [int](($rt.Top + $rt.Bottom) / 2)
+    $b = @([AC]::Botones($ide) | ForEach-Object { [AC]::Rect($_) } |
+        Where-Object { $_.Top -le $y -and $_.Bottom -ge $y -and $_.Left -ge $rt.Right -and $_.Left -le $rt.Right + 80 } |
+        Sort-Object Left)
+    if ($b.Count -lt 3) { Mal "no encuentro la chincheta (botones en la fila: $($b.Count))"; return $false }
+    return (ClicProtegido $p ([int](($b[-2].Left + $b[-2].Right) / 2)) $y)
+}
+
+# La pestana de un auto-oculto en un borde lateral: etiqueta angosta y alta.
+function PestanaLateral($ide, $texto) {
+    foreach ($h in (Etiquetas $ide $texto)) {
+        $r = [AC]::Rect($h)
+        if (($r.Right - $r.Left) -le 30 -and ($r.Bottom - $r.Top) -gt ($r.Right - $r.Left)) { return $h }
+    }
+    return $null
+}
+
+function MoverRaton($p, $x, $y) {
+    if ([AC]::Mover([uint32]$p.Id, [int]$x, [int]$y)) { return $true }
+    AvisoProteccion "el punto ($x,$y) no es del editor: NO se mueve el raton"
+    return $false
+}
+
+function FocoEnElIDE($ide) { return ([AC]::Foco($ide)).EndsWith("[dentro del IDE]") }
 
 # ---------------------------------------------------------------------------
 Titulo "Preparando"
@@ -313,6 +359,139 @@ try {
         } else { AvisoProteccion "el divisor no es del editor o el editor no esta al frente: no se arrastra"; Mal "no se pudo arrastrar el divisor" }
         [AC]::Capturar($ide, (Join-Path $PSScriptRoot "acople_final.png"))
     }
+
+    # -----------------------------------------------------------------------
+    Titulo "F. Auto-ocultar el explorador (chincheta)"
+
+    # Un punto de los documentos, lejos de los paneles: para sacar el raton.
+    $afueraX = [int]($rv.Left + ($rv.Right - $rv.Left) * 0.25)
+    $afueraY = [int]($rv.Top + 200)
+
+    $exp = Etiquetas $ide "Explorador"
+    if ($exp.Count -eq 1) {
+        [void](TraerAlFrente $p $ide)
+        [void](Chincheta $p $ide $exp[0])
+        Start-Sleep -Milliseconds 700
+        $tab = PestanaLateral $ide "Explorador"
+        $exp = Etiquetas $ide "Explorador"
+        if ($tab -and $exp.Count -eq 1) { Bien "la chincheta lo paso a una pestana vertical" } else { Mal "tras la chincheta: $($exp.Count) etiqueta(s), pestana lateral: $([bool]$tab)" }
+        if ($tab -and ([AC]::Rect($tab)).Right -ge $rv.Right - 40) { Bien "la pestana esta en el borde derecho" } else { Mal "la pestana no esta en el borde derecho" }
+        Write-Host "    rastro foco tras la chincheta: $([AC]::Foco($ide))" -ForegroundColor DarkGray
+        if (FocoEnElIDE $ide) { Bien "el foco sigue dentro del IDE (no quedo en la chincheta estacionada)" } else { Mal "el foco quedo FUERA del IDE" }
+        [AC]::Capturar($ide, (Join-Path $PSScriptRoot "acople_autooculto.png"))
+
+        if ($tab) {
+            $ct = Centro $tab
+
+            # Raton encima: se despliega (400 ms), sin foco.
+            [void](MoverRaton $p $afueraX $afueraY)
+            [void](MoverRaton $p $ct[0] $ct[1])
+            Start-Sleep -Milliseconds 1000
+            $exp = Etiquetas $ide "Explorador"
+            $titulo = @($exp | Where-Object { $_ -ne $tab })
+            # Pegado a su pestana: el titulo termina donde empiezan los botones
+            # del panel (~80 px antes de su borde derecho), no lejos.
+            $hueco = if ($titulo.Count -eq 1) { ([AC]::Rect($tab)).Left - ([AC]::Rect($titulo[0])).Right } else { -1 }
+            if ($exp.Count -eq 2 -and $hueco -ge 0 -and $hueco -le 120) { Bien "el raton encima lo desplego, pegado a su pestana ($hueco px)" } else { Mal "raton encima: $($exp.Count) etiqueta(s), hueco con la pestana $hueco px" }
+            [AC]::Capturar($ide, (Join-Path $PSScriptRoot "acople_desplegado.png"))
+
+            # El raton se va: se pliega.
+            [void](MoverRaton $p $afueraX $afueraY)
+            Start-Sleep -Milliseconds 1000
+            if ((Etiquetas $ide "Explorador").Count -eq 1) { Bien "al sacar el raton se plego" } else { Mal "al sacar el raton NO se plego" }
+
+            # Pasar rapido: no se despliega. Se mira TODO el tramo, cada 50 ms:
+            # si se desplegara (a los 400 ms) se volveria a plegar solo (a los
+            # ~700), y mirar una vez al final no lo veia (romper_acople, 28/09).
+            [void](MoverRaton $p $ct[0] $ct[1])
+            Start-Sleep -Milliseconds 150
+            [void](MoverRaton $p $afueraX $afueraY)
+            $maximo = 0
+            $reloj = [Diagnostics.Stopwatch]::StartNew()
+            while ($reloj.ElapsedMilliseconds -lt 1200) {
+                $n = (Etiquetas $ide "Explorador").Count
+                if ($n -gt $maximo) { $maximo = $n }
+                Start-Sleep -Milliseconds 50
+            }
+            if ($maximo -eq 1) { Bien "pasar rapido por la pestana no lo despliega" } else { Mal "pasar rapido lo desplego (llego a $maximo etiquetas)" }
+
+            # Clic: se despliega con el foco y se queda aunque el raton se vaya.
+            [void](Clic $p $tab)
+            Start-Sleep -Milliseconds 600
+            [void](MoverRaton $p $afueraX $afueraY)
+            Start-Sleep -Milliseconds 1000
+            Write-Host "    rastro foco tras el clic en la pestana: $([AC]::Foco($ide))" -ForegroundColor DarkGray
+            if ((Etiquetas $ide "Explorador").Count -eq 2) { Bien "con clic se desplego y se queda con el raton afuera (tiene el foco)" } else { Mal "con clic no quedo desplegado" }
+
+            # El foco se va a otro panel: se pliega.
+            $sal = Etiquetas $ide "Salida"
+            if ($sal.Count -ge 1) {
+                $rs = [AC]::Rect($sal[0])
+                # Cerca del borde izquierdo: el explorador desplegado tapa la derecha.
+                [void](ClicProtegido $p ([int]($rs.Left + 40)) ([int]($rs.Bottom + 50)))
+                Start-Sleep -Milliseconds 1000
+                if ((Etiquetas $ide "Explorador").Count -eq 1) { Bien "clic en la salida: el foco se fue y se plego" } else { Mal "clic en la salida: NO se plego" }
+            } else { Mal "no encuentro la salida para llevarle el foco" }
+
+            # Ctrl+B: despliega (no cierra) y otra vez pliega.
+            [void](TraerAlFrente $p $ide)
+            [void](TeclasProtegidas $p "^b" 900)
+            if ((Etiquetas $ide "Explorador").Count -eq 2) { Bien "Ctrl+B sobre el auto-oculto lo despliega (no lo cierra)" } else { Mal "Ctrl+B no lo desplego: $((Etiquetas $ide 'Explorador').Count) etiqueta(s)" }
+            [void](TeclasProtegidas $p "^b" 900)
+            Write-Host "    rastro foco tras plegar con Ctrl+B: $([AC]::Foco($ide))" -ForegroundColor DarkGray
+            if ((Etiquetas $ide "Explorador").Count -eq 1 -and (PestanaLateral $ide "Explorador")) { Bien "Ctrl+B otra vez lo pliega y queda su pestana" } else { Mal "Ctrl+B otra vez no lo plego a su pestana" }
+            if (FocoEnElIDE $ide) { Bien "plegado con el foco adentro: el foco vuelve al IDE" } else { Mal "plegado con el foco adentro: el foco quedo FUERA del IDE" }
+
+            # Los atajos siguen vivos (la trampa de la 3a): Ctrl+B lo despliega otra vez.
+            [void](TeclasProtegidas $p "^b" 900)
+            $exp = Etiquetas $ide "Explorador"
+            if ($exp.Count -eq 2) { Bien "los atajos siguen vivos tras plegar" } else { Mal "tras plegar, Ctrl+B ya no responde" }
+
+            # La chincheta del desplegado lo fija de nuevo a la derecha.
+            $titulo = @($exp | Where-Object { $_ -ne (PestanaLateral $ide "Explorador") })
+            if ($titulo.Count -eq 1) {
+                [void](Chincheta $p $ide $titulo[0])
+                Start-Sleep -Milliseconds 700
+                $exp = Etiquetas $ide "Explorador"
+                if ($exp.Count -eq 1 -and -not (PestanaLateral $ide "Explorador") -and (Centro $exp[0])[0] -gt $medio) { Bien "la chincheta lo volvio a acoplar a la derecha, sin pestana" } else { Mal "tras fijar: $($exp.Count) etiqueta(s), pestana: $([bool](PestanaLateral $ide 'Explorador'))" }
+            } else { Mal "no encuentro el titulo del explorador desplegado" }
+        }
+    } else { Mal "no esta el explorador para probar la chincheta" }
+
+    # -----------------------------------------------------------------------
+    Titulo "G. Auto-ocultar abajo (lista de errores)"
+
+    $err = Etiquetas $ide "Lista de errores"
+    if ($err.Count -eq 1) { [void](Clic $p $err[0]); Start-Sleep -Milliseconds 500 }
+    $err = Etiquetas $ide "Lista de errores"
+    if ($err.Count -eq 2) {
+        [void](TraerAlFrente $p $ide)
+        [void](Chincheta $p $ide $err[0])
+        Start-Sleep -Milliseconds 700
+        $err = Etiquetas $ide "Lista de errores"
+        $sal = Etiquetas $ide "Salida"
+        $re = if ($err.Count -eq 1) { [AC]::Rect($err[0]) } else { $null }
+        if ($re -and ($re.Right - $re.Left) -gt ($re.Bottom - $re.Top) -and $sal.Count -eq 1 -and $re.Top -gt ([AC]::Rect($sal[0])).Bottom) {
+            Bien "la lista paso a una pestana horizontal abajo; la salida quedo sola, sin pestanas"
+        } else { Mal "tras la chincheta: lista $($err.Count), salida $($sal.Count)" }
+
+        if ($err.Count -eq 1) {
+            [void](Clic $p $err[0])
+            Start-Sleep -Milliseconds 700
+            $err = Etiquetas $ide "Lista de errores"
+            if ($err.Count -eq 2) { Bien "clic en la pestana de abajo la desplego" } else { Mal "clic en la pestana de abajo: $($err.Count) etiqueta(s)" }
+            [AC]::Capturar($ide, (Join-Path $PSScriptRoot "acople_abajo_desplegado.png"))
+
+            if ($err.Count -eq 2) {
+                [void](Chincheta $p $ide $err[0])
+                Start-Sleep -Milliseconds 700
+                $err = Etiquetas $ide "Lista de errores"
+                $sal = Etiquetas $ide "Salida"
+                if ($err.Count -eq 2 -and $sal.Count -eq 1) { Bien "fijada: vuelve abajo, activa y con sus pestanas" } else { Mal "tras fijar: lista $($err.Count), salida $($sal.Count)" }
+            }
+        }
+        [AC]::Capturar($ide, (Join-Path $PSScriptRoot "acople_fin_3c.png"))
+    } else { Mal "no se pudo poner la lista de errores al frente" }
 } finally {
     CerrarEditorAislado
 }

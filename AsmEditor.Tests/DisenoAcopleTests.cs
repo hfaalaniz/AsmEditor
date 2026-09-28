@@ -173,6 +173,164 @@ public class DisenoAcopleTests
         Assert.Equal(new[] { "explorador", "errores" }, d.VisiblesEn(ZonaAcople.Derecha));
     }
 
+    // ---------------- Auto-ocultar (la chincheta, 3c) ----------------
+
+    [Fact]
+    public void AutoOcultar_LoSacaDeLaZona_YLoPoneEnElBorde()
+    {
+        var d = DeFabrica();
+
+        d.AutoOcultar("explorador");
+
+        Assert.Empty(d.VisiblesEn(ZonaAcople.Derecha));
+        Assert.False(d.ZonaVisible(ZonaAcople.Derecha));
+        Assert.Equal(new[] { "explorador" }, d.AutoOcultosEn(ZonaAcople.Derecha));
+        Assert.True(d.EstaVisible("explorador"));      // sigue a mano: su pestaña del borde
+        Assert.True(d.EstaAutoOculto("explorador"));
+    }
+
+    [Fact]
+    public void AutoOcultar_ElActivo_PasaALaVecina()
+    {
+        // Tres paneles: con dos, «la vecina» y «la primera» son la misma y la
+        // prueba pasaba aunque no se buscara la vecina (romper_diseno_acople).
+        var d = DeFabrica();                       // abajo: errores, salida
+        d.Registrar("pila", ZonaAcople.Abajo);     //        pila
+        d.Activar("salida");
+
+        d.AutoOcultar("salida");
+
+        Assert.Equal("pila", d.ActivoEn(ZonaAcople.Abajo));
+        Assert.Equal(new[] { "errores", "pila" }, d.VisiblesEn(ZonaAcople.Abajo));
+        Assert.Equal(new[] { "salida" }, d.AutoOcultosEn(ZonaAcople.Abajo));
+    }
+
+    [Fact]
+    public void Fijar_LoVuelveAAcoplar_EnSuLugarYActivo()
+    {
+        var d = DeFabrica();
+        d.AutoOcultar("errores");
+        d.Activar("salida");    // si no, «errores» sería el activo solo por ser el primero
+
+        d.Fijar("errores");
+
+        Assert.Equal(new[] { "errores", "salida" }, d.VisiblesEn(ZonaAcople.Abajo));
+        Assert.Equal("errores", d.ActivoEn(ZonaAcople.Abajo));
+        Assert.Empty(d.AutoOcultosEn(ZonaAcople.Abajo));
+        Assert.False(d.EstaAutoOculto("errores"));
+    }
+
+    /// <summary>Cerrarlo con ✕ y volver a mostrarlo lo trae como estaba: auto-oculto.</summary>
+    [Fact]
+    public void OcultarYMostrar_UnAutoOculto_VuelveAutoOculto()
+    {
+        var d = DeFabrica();
+        d.AutoOcultar("explorador");
+
+        d.Ocultar("explorador");
+        Assert.Empty(d.AutoOcultosEn(ZonaAcople.Derecha));
+        Assert.False(d.EstaVisible("explorador"));
+
+        d.Mostrar("explorador");
+        Assert.Equal(new[] { "explorador" }, d.AutoOcultosEn(ZonaAcople.Derecha));
+        Assert.Empty(d.VisiblesEn(ZonaAcople.Derecha));
+    }
+
+    /// <summary>Ocultar un auto-oculto no le cambia la pestaña activa a la zona.</summary>
+    [Fact]
+    public void Ocultar_UnAutoOculto_NoTocaElActivoDeLaZona()
+    {
+        var d = DeFabrica();
+        d.Activar("salida");
+        d.AutoOcultar("errores");
+
+        d.Ocultar("errores");
+
+        Assert.Equal("salida", d.ActivoEn(ZonaAcople.Abajo));
+    }
+
+    [Fact]
+    public void Mover_UnAutoOculto_LoAcopla()
+    {
+        var d = DeFabrica();
+        d.AutoOcultar("explorador");
+
+        d.Mover("explorador", ZonaAcople.Izquierda);
+
+        Assert.Equal(new[] { "explorador" }, d.VisiblesEn(ZonaAcople.Izquierda));
+        Assert.False(d.EstaAutoOculto("explorador"));
+    }
+
+    /// <summary>Darle el foco a un auto-oculto (desplegado) no le cambia el activo a la zona.</summary>
+    [Fact]
+    public void Activar_UnAutoOculto_NoTocaElActivoDeLaZona()
+    {
+        var d = DeFabrica();                       // abajo: errores, salida
+        d.Registrar("pila", ZonaAcople.Abajo);     //        pila
+        d.Registrar("consola", ZonaAcople.Abajo);  //        consola
+        d.AutoOcultar("consola");
+        d.Activar("salida");
+
+        d.Activar("consola");
+        d.Ocultar("salida");
+
+        // Sin la guarda, «consola» quedaba anotado como activo: al ocultar
+        // «salida» no se buscaba la vecina (pila) y la zona volvía a la
+        // primera (errores).
+        Assert.Equal("pila", d.ActivoEn(ZonaAcople.Abajo));
+        Assert.False(d.Activos.ContainsValue("consola"));
+    }
+
+    [Fact]
+    public void AutoOcultar_DosVeces_NoCambiaNada()
+    {
+        var d = DeFabrica();
+        d.AutoOcultar("errores");
+        d.Activar("salida");
+
+        d.AutoOcultar("errores");
+
+        Assert.Equal("salida", d.ActivoEn(ZonaAcople.Abajo));
+        Assert.Equal(new[] { "errores" }, d.AutoOcultosEn(ZonaAcople.Abajo));
+    }
+
+    /// <summary>
+    /// Un auto-oculto cerrado (✕) sigue cerrado aunque le pidan auto-ocultarse:
+    /// ya lo está, y volver a mostrarlo es cosa de Mostrar.
+    /// </summary>
+    [Fact]
+    public void AutoOcultar_UnAutoOcultoCerrado_NoLoVuelveAMostrar()
+    {
+        var d = DeFabrica();
+        d.AutoOcultar("errores");
+        d.Ocultar("errores");
+
+        d.AutoOcultar("errores");
+
+        Assert.False(d.EstaVisible("errores"));
+        Assert.Empty(d.AutoOcultosEn(ZonaAcople.Abajo));
+    }
+
+    /// <summary>Mostrar un auto-oculto (vuelve a su pestaña del borde) no le cambia el activo a la zona.</summary>
+    [Fact]
+    public void Mostrar_UnAutoOculto_NoTocaElActivoDeLaZona()
+    {
+        var d = DeFabrica();                       // abajo: errores, salida
+        d.Registrar("pila", ZonaAcople.Abajo);     //        pila
+        d.Registrar("consola", ZonaAcople.Abajo);  //        consola
+        d.AutoOcultar("consola");
+        d.Ocultar("consola");
+        d.Activar("salida");
+
+        d.Mostrar("consola");
+        d.Ocultar("salida");
+
+        // Si Mostrar anotara a «consola» como activo, al ocultar «salida» no
+        // se buscaría la vecina (pila) y la zona volvería a la primera.
+        Assert.Equal("pila", d.ActivoEn(ZonaAcople.Abajo));
+        Assert.Equal(new[] { "consola" }, d.AutoOcultosEn(ZonaAcople.Abajo));
+    }
+
     // ---------------- Tamaños ----------------
 
     [Fact]
@@ -201,10 +359,12 @@ public class DisenoAcopleTests
         d.Activar("salida");
         d.FijarTamano(ZonaAcople.Derecha, 333);
         d.Ocultar("explorador");
+        d.AutoOcultar("errores");
 
         var leido = JsonSerializer.Deserialize<DisenoAcople>(JsonSerializer.Serialize(d))!;
         leido.EnsureValid();
 
+        Assert.True(leido.EstaAutoOculto("errores"));
         Assert.Equal("salida", leido.ActivoEn(ZonaAcople.Abajo));
         Assert.Equal(333, leido.TamanoDe(ZonaAcople.Derecha, 280));
         Assert.False(leido.EstaVisible("explorador"));

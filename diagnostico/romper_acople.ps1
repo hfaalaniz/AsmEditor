@@ -6,8 +6,13 @@
 # SECCION que cubre ese defecto tenga un MAL. Restaura cada fuente byte por
 # byte (finally) y recompila el original.
 #
+# -Solo "texto": corre solo los defectos cuyo nombre lo contiene (para
+# repetir uno sin esperar los ~25 minutos de todos).
+#
 # Es para que lo lea yo, no forma parte de la interfaz.
 # ============================================================================
+
+param([string]$Solo = "")
 
 $ErrorActionPreference = "Stop"
 
@@ -23,15 +28,51 @@ $defectos = @(
        De = 'tira.Visible = _ventanas.Count > 1;'; A = 'tira.Visible = false;' },
     @{ Nombre = "la pestana no cambia el panel activo"; Seccion = "B."; Archivo = "Acople\AnfitrionAcople.cs"
        De = "        Diseno.Activar(v.Id);`n        Actualizar();"; A = "        Actualizar();" },
+    # Desde la 3c esa linea esta tambien en Plegar y en la chincheta: se
+    # ancla con el Avisar() que la sigue, que solo tiene la de Ocultar.
     @{ Nombre = "el foco queda en la X oculta"; Seccion = "C."; Archivo = "Acople\AnfitrionAcople.cs"
-       De = 'if (IsHandleCreated) BeginInvoke(DevolverFocoSiQuedoAfuera);'; A = '' },
+       De = "if (IsHandleCreated) BeginInvoke(DevolverFocoSiQuedoAfuera);`n        Avisar();"; A = "Avisar();" },
     @{ Nombre = "el foco se elige pero no se da"; Seccion = "C."; Archivo = "Acople\AnfitrionAcople.cs"
        De = 'if (elegido is not null && elegido.Focus()) return;'; A = 'return;' },
     @{ Nombre = "pestanas con un solo panel"; Seccion = "D."; Archivo = "Acople\GrupoHerramientas.cs"
        De = 'tira.Visible = _ventanas.Count > 1;'; A = 'tira.Visible = _ventanas.Count > 0;' },
     @{ Nombre = "el divisor no guarda el ancho"; Seccion = "E."; Archivo = "Acople\AnfitrionAcople.cs"
-       De = 'Diseno.FijarTamano(z, z == ZonaAcople.Abajo ? ZonaDe(z).Height : ZonaDe(z).Width);'; A = '' }
+       De = 'Diseno.FijarTamano(z, z == ZonaAcople.Abajo ? ZonaDe(z).Height : ZonaDe(z).Width);'; A = '' },
+
+    # ---- Auto-ocultar (3c) ----
+    @{ Nombre = "el foco queda en la chincheta estacionada"; Seccion = "F."; Archivo = "Acople\AnfitrionAcople.cs"
+       De = '            if (IsHandleCreated) BeginInvoke(DevolverFocoSiQuedoAfuera);'; A = '' },
+    # NO VA "plegar con el foco adentro lo deja afuera" (sacar el BeginInvoke
+    # de Plegar): medido el 28/09, sin esa linea el foco IGUAL vuelve al IDE (a la
+    # salida, donde estaba antes) y los atajos siguen vivos. El unico camino
+    # que pliega con el foco adentro es Alternar (Ctrl+B / Ver), y ahi WinForms
+    # ya lo devuelve al sacar el panel. Los otros caminos no llegan con el
+    # foco: la X devuelve el suyo (Ocultar), la chincheta lo da (Fijar) y
+    # tmrPlegar no pliega si el foco esta adentro. Queda como resguardo.
+    @{ Nombre = "el raton encima no despliega"; Seccion = "F."; Archivo = "Acople\AnfitrionAcople.cs"
+       De = 'else Desplegar(id, enfocar: false);'; A = 'else tmrDesplegar.Stop();' },
+    # Las DOS lineas: sacar solo el Stop() es un defecto equivalente (con
+    # _porDesplegar en null el Tick no despliega nada; medido el 28/09).
+    @{ Nombre = "pasar rapido despliega igual"; Seccion = "F."; Archivo = "Acople\AnfitrionAcople.cs"
+       De = "        if (_porDesplegar != id) return;`n        tmrDesplegar.Stop();`n        _porDesplegar = null;"; A = "        if (_porDesplegar != id) return;" },
+    @{ Nombre = "no se pliega nunca"; Seccion = "F."; Archivo = "Acople\AnfitrionAcople.cs"
+       De = 'if (BordeDe(zona).RectanguloEnPantalla(_desplegado).Contains(raton)) return;'; A = 'return;' },
+    @{ Nombre = "se pliega aunque tenga el foco"; Seccion = "F."; Archivo = "Acople\AnfitrionAcople.cs"
+       De = 'if (pnlDesplegado.ContainsFocus || v.MenuAbierto) return;'; A = 'if (v.MenuAbierto) return;' },
+    @{ Nombre = "desplegado pegado al borde contrario"; Seccion = "F."; Archivo = "Acople\AnfitrionAcople.cs"
+       De = 'new(a.Right - ancho, a.Top, ancho, a.Height)'; A = 'new(a.Left, a.Top, ancho, a.Height)' },
+    @{ Nombre = "el clic en la pestana no despliega"; Seccion = "F."; Archivo = "Acople\AnfitrionAcople.cs"
+       De = '=> Desplegar(id, enfocar: true);'; A = '=> _ = id;' },
+    @{ Nombre = "Ctrl+B cierra el auto-oculto"; Seccion = "F."; Archivo = "Acople\AnfitrionAcople.cs"
+       De = 'else if (!Diseno.EstaAutoOculto(id)) Ocultar(id);'; A = 'else if (true) Ocultar(id);' },
+    @{ Nombre = "la chincheta del auto-oculto no lo fija"; Seccion = "F."; Archivo = "Acople\AnfitrionAcople.cs"
+       De = '            Diseno.Fijar(v.Id);'; A = '            Diseno.AutoOcultar(v.Id);' },
+    @{ Nombre = "sin franja abajo"; Seccion = "G."; Archivo = "Acople\AnfitrionAcople.cs"
+       De = 'borde.Visible = pestanas.Count > 0;'; A = 'borde.Visible = pestanas.Count > 0 && z != ZonaAcople.Abajo;' }
 )
+
+if ($Solo) { $defectos = @($defectos | Where-Object { $_.Nombre -like "*$Solo*" }) }
+if ($defectos.Count -eq 0) { throw "Ningun defecto coincide con '$Solo'." }
 
 function Compilar {
     $antes = if (Test-Path $dll) { (Get-Item $dll).LastWriteTime } else { [datetime]::MinValue }
@@ -62,7 +103,10 @@ try {
         $texto = [Text.Encoding]::UTF8.GetString($originales[$f])
         $de = $d.De; $a = $d.A
         if ($texto.Contains("`r`n")) { $de = $de.Replace("`n", "`r`n"); $a = $a.Replace("`n", "`r`n") }
-        if (-not $texto.Contains($de)) { throw "No encuentro el texto a romper para '$($d.Nombre)': el fuente cambio." }
+        # EXACTAMENTE una vez: Replace cambia todas, y un texto repetido rompe
+        # mas de lo que dice el nombre (paso con el foco de la X en la 3c).
+        $veces = ([regex]::Matches($texto, [regex]::Escape($de))).Count
+        if ($veces -ne 1) { throw "El texto a romper para '$($d.Nombre)' aparece $veces veces (tiene que ser 1): el fuente cambio." }
 
         Write-Host "--- $($d.Nombre)"
         [IO.File]::WriteAllText($f, $texto.Replace($de, $a), $utf8SinBom)

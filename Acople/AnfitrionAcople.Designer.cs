@@ -17,6 +17,13 @@ namespace AsmEditor
 
         private void InitializeComponent()
         {
+            this.components = new System.ComponentModel.Container();
+            this.pnlDesplegado = new System.Windows.Forms.Panel();
+            this.bordeIzquierda = new AsmEditor.BordeAutoOcultos();
+            this.bordeDerecha = new AsmEditor.BordeAutoOcultos();
+            this.bordeAbajo = new AsmEditor.BordeAutoOcultos();
+            this.tmrDesplegar = new System.Windows.Forms.Timer(this.components);
+            this.tmrPlegar = new System.Windows.Forms.Timer(this.components);
             this.zonaIzquierda = new System.Windows.Forms.Panel();
             this.grupoIzquierda = new AsmEditor.GrupoHerramientas();
             this.divisorIzquierda = new System.Windows.Forms.Splitter();
@@ -130,10 +137,69 @@ namespace AsmEditor
             this.pnlCentro.Size = new System.Drawing.Size(470, 475);
             this.pnlCentro.TabIndex = 6;
             //
+            // pnlDesplegado
+            //
+            this.pnlDesplegado.Location = new System.Drawing.Point(420, 0);
+            this.pnlDesplegado.Name = "pnlDesplegado";
+            this.pnlDesplegado.Padding = new System.Windows.Forms.Padding(1);
+            this.pnlDesplegado.Size = new System.Drawing.Size(280, 470);
+            this.pnlDesplegado.TabIndex = 7;
+            this.pnlDesplegado.Visible = false;
+            //
+            // bordeIzquierda
+            //
+            this.bordeIzquierda.Dock = System.Windows.Forms.DockStyle.Left;
+            this.bordeIzquierda.Lado = AsmEditor.Core.Acople.ZonaAcople.Izquierda;
+            this.bordeIzquierda.Location = new System.Drawing.Point(0, 0);
+            this.bordeIzquierda.Name = "bordeIzquierda";
+            this.bordeIzquierda.Size = new System.Drawing.Size(24, 700);
+            this.bordeIzquierda.TabIndex = 8;
+            this.bordeIzquierda.Visible = false;
+            this.bordeIzquierda.PestanaSenalada += new System.EventHandler<string>(this.Borde_PestanaSenalada);
+            this.bordeIzquierda.PestanaDejada += new System.EventHandler<string>(this.Borde_PestanaDejada);
+            this.bordeIzquierda.PestanaElegida += new System.EventHandler<string>(this.Borde_PestanaElegida);
+            //
+            // bordeDerecha
+            //
+            this.bordeDerecha.Dock = System.Windows.Forms.DockStyle.Right;
+            this.bordeDerecha.Lado = AsmEditor.Core.Acople.ZonaAcople.Derecha;
+            this.bordeDerecha.Location = new System.Drawing.Point(976, 0);
+            this.bordeDerecha.Name = "bordeDerecha";
+            this.bordeDerecha.Size = new System.Drawing.Size(24, 700);
+            this.bordeDerecha.TabIndex = 9;
+            this.bordeDerecha.Visible = false;
+            this.bordeDerecha.PestanaSenalada += new System.EventHandler<string>(this.Borde_PestanaSenalada);
+            this.bordeDerecha.PestanaDejada += new System.EventHandler<string>(this.Borde_PestanaDejada);
+            this.bordeDerecha.PestanaElegida += new System.EventHandler<string>(this.Borde_PestanaElegida);
+            //
+            // bordeAbajo
+            //
+            this.bordeAbajo.Dock = System.Windows.Forms.DockStyle.Bottom;
+            this.bordeAbajo.Lado = AsmEditor.Core.Acople.ZonaAcople.Abajo;
+            this.bordeAbajo.Location = new System.Drawing.Point(0, 676);
+            this.bordeAbajo.Name = "bordeAbajo";
+            this.bordeAbajo.Size = new System.Drawing.Size(1000, 24);
+            this.bordeAbajo.TabIndex = 10;
+            this.bordeAbajo.Visible = false;
+            this.bordeAbajo.PestanaSenalada += new System.EventHandler<string>(this.Borde_PestanaSenalada);
+            this.bordeAbajo.PestanaDejada += new System.EventHandler<string>(this.Borde_PestanaDejada);
+            this.bordeAbajo.PestanaElegida += new System.EventHandler<string>(this.Borde_PestanaElegida);
+            //
+            // tmrDesplegar
+            //
+            this.tmrDesplegar.Interval = 400;
+            this.tmrDesplegar.Tick += new System.EventHandler(this.tmrDesplegar_Tick);
+            //
+            // tmrPlegar
+            //
+            this.tmrPlegar.Interval = 300;
+            this.tmrPlegar.Tick += new System.EventHandler(this.tmrPlegar_Tick);
+            //
             // AnfitrionAcople
             //
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            this.Controls.Add(this.pnlDesplegado);
             this.Controls.Add(this.pnlCentro);
             this.Controls.Add(this.divisorAbajo);
             this.Controls.Add(this.zonaAbajo);
@@ -141,8 +207,12 @@ namespace AsmEditor
             this.Controls.Add(this.zonaDerecha);
             this.Controls.Add(this.divisorIzquierda);
             this.Controls.Add(this.zonaIzquierda);
+            this.Controls.Add(this.bordeAbajo);
+            this.Controls.Add(this.bordeDerecha);
+            this.Controls.Add(this.bordeIzquierda);
             this.Name = "AnfitrionAcople";
             this.Size = new System.Drawing.Size(1000, 700);
+            this.SizeChanged += new System.EventHandler(this.AnfitrionAcople_SizeChanged);
             this.zonaIzquierda.ResumeLayout(false);
             this.zonaDerecha.ResumeLayout(false);
             this.zonaAbajo.ResumeLayout(false);
@@ -161,5 +231,11 @@ namespace AsmEditor
         private AsmEditor.GrupoHerramientas grupoAbajo;
         private System.Windows.Forms.Splitter divisorAbajo;
         private System.Windows.Forms.Panel pnlCentro;
+        private System.Windows.Forms.Panel pnlDesplegado;
+        private AsmEditor.BordeAutoOcultos bordeIzquierda;
+        private AsmEditor.BordeAutoOcultos bordeDerecha;
+        private AsmEditor.BordeAutoOcultos bordeAbajo;
+        private System.Windows.Forms.Timer tmrDesplegar;
+        private System.Windows.Forms.Timer tmrPlegar;
     }
 }

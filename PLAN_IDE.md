@@ -265,8 +265,22 @@ compartían la zona de abajo, y sin pestañas una quedaba inaccesible.
   `TiraPestanasHerramienta` (pestañas abajo, solo con más de un panel; son
   etiquetas reales para que las pruebas las lean). Lista de errores · Salida.
   Prueba por interfaz: `acople.ps1`, verificada con `romper_acople.ps1`.
-- [ ] **3c · Auto-ocultar (chincheta):** el panel se repliega a una pestaña en
-  el borde y se despliega al pasar el ratón.
+- [x] **3c · Auto-ocultar (chincheta)** *(28/09)*: la chincheta (o «Ocultar
+  automáticamente» del ▾) repliega el panel a una pestaña en la franja del
+  borde de su lado (`BordeAutoOcultos` + `PestanaBorde`, vertical en los
+  costados). Ratón encima 400 ms → se despliega encima de todo
+  (`pnlDesplegado`), sin foco; clic → al instante y con foco. Se pliega
+  (`tmrPlegar`, 300 ms) solo si el ratón no está ni sobre el panel ni sobre
+  su pestaña, el foco no está adentro y el menú ▾ está cerrado. La chincheta
+  del desplegado lo vuelve a acoplar.
+  ⚠ Decisión de Fabián: **Ctrl+B / Ver sobre un auto-oculto NO lo cierra**
+  (como VS): lo despliega con foco, y si ya está desplegado lo pliega.
+  `Mostrar` de un auto-oculto también lo despliega con foco.
+  ⚠ `DisenoAcople.Activar` ignora los auto-ocultos: darle el foco al
+  desplegado pisaba el activo de su zona.
+  Los dos `romper_*` quedaron desactualizados por la reforma del modelo
+  del 23/09 (un texto a romper ya no existía y otro rompía OTRO método):
+  ahora exigen que cada texto aparezca **exactamente una vez**.
 - [ ] **3d · Flotar:** arrastrar la barra de título fuera de la zona lo
   convierte en ventana flotante; doble clic lo vuelve a acoplar.
 - [ ] **3e · Acoplar arrastrando:** guías de acople (rombo central y guías de
@@ -321,6 +335,7 @@ compartían la zona de abajo, y sin pestañas una quedaba inaccesible.
 | 23/09/2026 | 1 | ver log | Ventana de inicio. 426 pruebas unitarias (17 nuevas de `RecientesInicio`, verificadas rompiéndolas). `ventana_inicio.ps1` 8 casos por interfaz, verificada con `romper_ventana_inicio.ps1` (6 defectos). |
 | 23/09/2026 | 1 | ver log | Ventana Configuración → Opciones (reemplaza a «Rutas de herramientas»). 431 pruebas unitarias (5 nuevas, verificadas con `romper_valores_opciones.ps1`, incluida una opción nueva sin conectar). `opciones.ps1` por interfaz, verificada con `romper_opciones.ps1` (6 defectos). `ventana_inicio` y `probar_barras` en verde. |
 | 23/09/2026 | 3a+3b | ver log | Acople en el editor: explorador a la derecha, Lista de errores · Salida abajo con pestañas, ✕ / Ver / Ctrl+B, divisores. 449 pruebas unitarias (18 del modelo, verificadas con `romper_diseno_acople.ps1`, 8 defectos). `acople.ps1` por interfaz, verificada con `romper_acople.ps1` (7 defectos). Corregido: el foco quedaba en la ✕ oculta y morían los atajos. Los 8 diagnósticos por interfaz en verde. |
+| 28/09/2026 | 3c | ver log | Auto-ocultar (chincheta). 459 pruebas unitarias; `romper_diseno_acople.ps1` 17/17 (5 no se detectaban: 4 pruebas corregidas o nuevas y 1 defecto equivalente, documentado). `acople.ps1` secciones F (explorador) y G (abajo), con capturas `acople_desplegado.png` y `acople_abajo_desplegado.png`; `romper_acople.ps1` 17/17 (7 viejos + 10 de la 3c; nuevo `-Solo` para repetir uno). El resguardo de foco de `Plegar` no es medible (WinForms ya devuelve el foco en el único camino que llega con foco): queda, documentado en `romper_acople.ps1`. |
 
 ### Pendientes detectados en la Etapa 2 (no tocados)
 

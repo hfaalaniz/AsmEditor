@@ -16,6 +16,13 @@ public sealed class UbicacionPanel
     /// <summary>False = oculto (se cerró con ✕ o desde Ver); conserva su zona para volver.</summary>
     public bool Visible { get; set; } = true;
 
+    /// <summary>
+    /// True = auto-oculto (la chincheta): no ocupa lugar en su zona; queda
+    /// como una pestaña en el borde de ese lado y se despliega encima de los
+    /// documentos. Se conserva al ocultarlo: vuelve auto-oculto.
+    /// </summary>
+    public bool AutoOculto { get; set; }
+
     /// <summary>Posición dentro de la zona: el orden de sus pestañas.</summary>
     public int Orden { get; set; }
 }
@@ -62,10 +69,20 @@ public sealed class DisenoAcople
         };
     }
 
-    /// <summary>Los paneles visibles de la zona, en el orden de sus pestañas.</summary>
+    /// <summary>
+    /// Los paneles ACOPLADOS y visibles de la zona, en el orden de sus
+    /// pestañas. Los auto-ocultos no están acá: ver <see cref="AutoOcultosEn"/>.
+    /// </summary>
     public IReadOnlyList<string> VisiblesEn(ZonaAcople zona) =>
+        EnZona(zona, autoOcultos: false);
+
+    /// <summary>Los auto-ocultos (visibles) de ese lado: las pestañas de su borde.</summary>
+    public IReadOnlyList<string> AutoOcultosEn(ZonaAcople zona) =>
+        EnZona(zona, autoOcultos: true);
+
+    private List<string> EnZona(ZonaAcople zona, bool autoOcultos) =>
         Paneles
-            .Where(p => p.Value.Zona == zona && p.Value.Visible)
+            .Where(p => p.Value.Zona == zona && p.Value.Visible && p.Value.AutoOculto == autoOcultos)
             .OrderBy(p => p.Value.Orden)
             .ThenBy(p => p.Key, StringComparer.Ordinal)
             .Select(p => p.Key)
@@ -86,47 +103,75 @@ public sealed class DisenoAcople
         return Activos.TryGetValue(zona, out var id) && visibles.Contains(id) ? id : visibles[0];
     }
 
+    /// <summary>Visible = acoplado o auto-oculto (con su pestaña en el borde); no cerrado.</summary>
     public bool EstaVisible(string id) => Paneles.TryGetValue(id, out var u) && u.Visible;
+
+    public bool EstaAutoOculto(string id) => Paneles.TryGetValue(id, out var u) && u.AutoOculto;
 
     public ZonaAcople? ZonaDe(string id) => Paneles.TryGetValue(id, out var u) ? u.Zona : null;
 
-    /// <summary>Lo deja como la pestaña activa de su zona (sin cambiar si se ve).</summary>
+    /// <summary>
+    /// Lo deja como la pestaña activa de su zona (sin cambiar si se ve).
+    ///
+    /// ⚠ Un auto-oculto NO: no está en la zona. Si no, al darle el foco
+    /// desplegado desde el borde se perdería cuál era el activo de verdad.
+    /// </summary>
     public void Activar(string id)
     {
-        if (Paneles.TryGetValue(id, out var u)) Activos[u.Zona] = id;
+        if (Paneles.TryGetValue(id, out var u) && !u.AutoOculto) Activos[u.Zona] = id;
     }
 
-    /// <summary>Lo muestra en su zona y lo deja activo.</summary>
+    /// <summary>
+    /// Lo muestra en su lugar: acoplado (y activo en su zona) o, si estaba
+    /// auto-oculto, de nuevo con su pestaña en el borde.
+    /// </summary>
     public void Mostrar(string id)
     {
         if (!Paneles.TryGetValue(id, out var u)) return;
         u.Visible = true;
-        Activos[u.Zona] = id;
+        if (!u.AutoOculto) Activos[u.Zona] = id;
     }
 
     /// <summary>
-    /// Lo oculta. Conserva la zona y el orden: al mostrarlo vuelve a su lugar.
-    /// Si era el activo, la zona pasa a la pestaña vecina (ver ActivoEn).
+    /// Lo oculta. Conserva la zona, el orden y si estaba auto-oculto: al
+    /// mostrarlo vuelve a su lugar. Si era el activo, la zona pasa a la
+    /// pestaña vecina (ver ActivoEn).
     /// </summary>
     public void Ocultar(string id)
     {
         if (!Paneles.TryGetValue(id, out var u)) return;
 
-        if (u.Visible && Activos.TryGetValue(u.Zona, out var activo) && activo == id)
-        {
-            // La vecina: la siguiente, o la anterior si era la última (como VS).
-            var visibles = VisiblesEn(u.Zona).ToList();
-            int i = visibles.IndexOf(id);
-            visibles.RemoveAt(i);
-
-            if (visibles.Count == 0) Activos.Remove(u.Zona);
-            else Activos[u.Zona] = visibles[Math.Min(i, visibles.Count - 1)];
-        }
-
+        if (u.Visible && !u.AutoOculto) SoltarActivo(u.Zona, id);
         u.Visible = false;
     }
 
-    /// <summary>Lo pasa a otra zona, como última pestaña, visible y activo.</summary>
+    /// <summary>
+    /// La chincheta, al acoplado: lo repliega a una pestaña en el borde de su
+    /// lado. Deja de ocupar lugar en la zona (la vecina pasa a ser la activa).
+    /// </summary>
+    public void AutoOcultar(string id)
+    {
+        if (!Paneles.TryGetValue(id, out var u) || u.AutoOculto) return;
+
+        if (u.Visible) SoltarActivo(u.Zona, id);
+        u.AutoOculto = true;
+        u.Visible = true;
+    }
+
+    /// <summary>La chincheta, al auto-oculto: lo vuelve a acoplar en su zona, activo.</summary>
+    public void Fijar(string id)
+    {
+        if (!Paneles.TryGetValue(id, out var u)) return;
+
+        u.AutoOculto = false;
+        u.Visible = true;
+        Activos[u.Zona] = id;
+    }
+
+    /// <summary>
+    /// Lo pasa a otra zona, como última pestaña, ACOPLADO (aunque estuviera
+    /// auto-oculto), visible y activo.
+    /// </summary>
     public void Mover(string id, ZonaAcople zona)
     {
         if (!Paneles.TryGetValue(id, out var u)) return;
@@ -138,7 +183,26 @@ public sealed class DisenoAcople
             u.Orden = SiguienteOrden(zona);
         }
 
+        u.AutoOculto = false;
         Mostrar(id);
+    }
+
+    /// <summary>
+    /// Un panel acoplado deja la zona (se oculta o se repliega): si era el
+    /// activo, pasa a serlo la vecina — la siguiente, o la anterior si era la
+    /// última, como en VS.
+    /// </summary>
+    private void SoltarActivo(ZonaAcople zona, string id)
+    {
+        if (!Activos.TryGetValue(zona, out var activo) || activo != id) return;
+
+        var visibles = VisiblesEn(zona).ToList();
+        int i = visibles.IndexOf(id);
+        if (i < 0) { Activos.Remove(zona); return; }
+
+        visibles.RemoveAt(i);
+        if (visibles.Count == 0) Activos.Remove(zona);
+        else Activos[zona] = visibles[Math.Min(i, visibles.Count - 1)];
     }
 
     /// <summary>El tamaño de la zona: el guardado, o el de fábrica.</summary>

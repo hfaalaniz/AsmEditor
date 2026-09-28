@@ -11,26 +11,36 @@ namespace AsmEditor;
 /// (<see cref="Contenido"/>): la ventana no sabe qué muestra.
 ///
 /// La ventana no decide dónde está: avisa (<see cref="OcultarPedido"/>,
-/// <see cref="Activada"/>) y el AnfitrionAcople actualiza el modelo
-/// (Core\Acople\DisenoAcople) y la acomoda.
+/// <see cref="ChinchetaPedida"/>, <see cref="Activada"/>) y el
+/// AnfitrionAcople actualiza el modelo (Core\Acople\DisenoAcople) y la
+/// acomoda.
 ///
-/// ⚠ La chincheta está en el diseñador pero oculta: su función es la 3c del
-/// plan (auto-ocultar). Un botón que no hace nada confunde más que uno que no
-/// está.
+/// La chincheta (3c del plan), como en VS: acoplado se ve vertical («fijo»)
+/// y al apretarla el panel se repliega al borde; replegado se ve acostada y
+/// al apretarla vuelve a su zona.
 /// </summary>
 public partial class VentanaHerramienta : UserControl
 {
     // Segoe MDL2 Assets, la misma fuente de los botones de la barra de título.
     // Se ponen acá y no en el diseñador: son glifos, no texto.
-    private static readonly string GlifoMenu = ((char)0xE70D).ToString();       // ChevronDown
-    private static readonly string GlifoChincheta = ((char)0xE718).ToString();  // Pin
-    private static readonly string GlifoCerrar = ((char)0xE8BB).ToString();     // ChromeClose
+    private static readonly string GlifoMenu = ((char)0xE70D).ToString();          // ChevronDown
+    private static readonly string GlifoFijo = ((char)0xE840).ToString();          // Pinned: acoplado
+    private static readonly string GlifoAutoOculto = ((char)0xE718).ToString();    // Pin: replegado
+    private static readonly string GlifoCerrar = ((char)0xE8BB).ToString();        // ChromeClose
+
+    // Los tooltips van acá y no en el diseñador (regla del diseñador: VS los
+    // mandaría al .resx, lejos del código que los explica).
+    private readonly ToolTip _ayuda = new();
 
     private Control? _contenido;
     private bool _activa;
+    private bool _autoOculta;
 
     /// <summary>✕ o «Ocultar» del menú del panel.</summary>
     public event EventHandler? OcultarPedido;
+
+    /// <summary>La chincheta (o «Ocultar automáticamente»): replegar o volver a acoplar.</summary>
+    public event EventHandler? ChinchetaPedida;
 
     /// <summary>El foco entró al panel: pasa a ser el activo de su zona.</summary>
     public event EventHandler? Activada;
@@ -40,8 +50,10 @@ public partial class VentanaHerramienta : UserControl
         InitializeComponent();
 
         btnMenu.Text = GlifoMenu;
-        btnChincheta.Text = GlifoChincheta;
         btnCerrar.Text = GlifoCerrar;
+        _ayuda.SetToolTip(btnMenu, "Opciones del panel");
+        _ayuda.SetToolTip(btnCerrar, "Ocultar");
+        MostrarEstadoChincheta();
 
         AplicarTema();
         Tema.TemaCambiado += AplicarTema;
@@ -104,6 +116,35 @@ public partial class VentanaHerramienta : UserControl
         }
     }
 
+    /// <summary>Replegado al borde (lo pone el anfitrión): cambia la chincheta y la marca del menú.</summary>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public bool AutoOculta
+    {
+        get => _autoOculta;
+        set
+        {
+            if (_autoOculta == value) return;
+            _autoOculta = value;
+            MostrarEstadoChincheta();
+        }
+    }
+
+    /// <summary>
+    /// El menú ▾ está abierto. Lo mira el anfitrión para no plegar un panel
+    /// desplegado mientras se elige algo del menú (el menú queda fuera del
+    /// panel, y el ratón también).
+    /// </summary>
+    [Browsable(false)]
+    public bool MenuAbierto => cmsVentana.Visible;
+
+    private void MostrarEstadoChincheta()
+    {
+        btnChincheta.Text = _autoOculta ? GlifoAutoOculto : GlifoFijo;
+        _ayuda.SetToolTip(btnChincheta, _autoOculta ? "Acoplar" : "Ocultar automáticamente");
+        miAutoOcultar.Checked = _autoOculta;
+    }
+
     /// <summary>Pone el foco en el contenido.</summary>
     public void Enfocar()
     {
@@ -133,6 +174,10 @@ public partial class VentanaHerramienta : UserControl
 
     private void miOcultar_Click(object? sender, EventArgs e) => OcultarPedido?.Invoke(this, EventArgs.Empty);
 
+    private void btnChincheta_Click(object? sender, EventArgs e) => ChinchetaPedida?.Invoke(this, EventArgs.Empty);
+
+    private void miAutoOcultar_Click(object? sender, EventArgs e) => ChinchetaPedida?.Invoke(this, EventArgs.Empty);
+
     // ------------------------------------------------------------------
     // Aspecto
     // ------------------------------------------------------------------
@@ -156,8 +201,13 @@ public partial class VentanaHerramienta : UserControl
         }
 
         cmsVentana.BackColor = Tema.Superficie2;
+        miAutoOcultar.ForeColor = Tema.Texto;
         miOcultar.ForeColor = Tema.Texto;
     }
 
-    private void VentanaHerramienta_Disposed(object? sender, EventArgs e) => Tema.TemaCambiado -= AplicarTema;
+    private void VentanaHerramienta_Disposed(object? sender, EventArgs e)
+    {
+        Tema.TemaCambiado -= AplicarTema;
+        _ayuda.Dispose();
+    }
 }

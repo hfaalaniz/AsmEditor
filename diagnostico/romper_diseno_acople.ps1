@@ -21,10 +21,12 @@ $defectos = @(
        De = 'return Activos.TryGetValue(zona, out var id) && visibles.Contains(id) ? id : visibles[0];'
        A  = 'return Activos.TryGetValue(zona, out var id) ? id : visibles[0];' },
     @{ Nombre = "ocultar el ultimo activo no pasa a la anterior"
-       De = 'else Activos[u.Zona] = visibles[Math.Min(i, visibles.Count - 1)];'
-       A  = 'else Activos[u.Zona] = visibles[0];' },
+       De = 'else Activos[zona] = visibles[Math.Min(i, visibles.Count - 1)];'
+       A  = 'else Activos[zona] = visibles[0];' },
+    # Desde la 3c el texto de Mostrar cambio: el viejo ("u.Visible = true;" +
+    # "Activos[u.Zona] = id;") ahora es el de Fijar y rompia OTRO metodo.
     @{ Nombre = "mostrar no lo deja activo"
-       De = "        u.Visible = true;`n        Activos[u.Zona] = id;"; A = "        u.Visible = true;" },
+       De = '        if (!u.AutoOculto) Activos[u.Zona] = id;'; A = '' },
     @{ Nombre = "sin tamano minimo"
        De = 'Tamanos[zona] = Math.Max(TamanoMinimo, pixeles);'; A = 'Tamanos[zona] = pixeles;' },
     @{ Nombre = "mover no lo pone ultimo"
@@ -33,7 +35,33 @@ $defectos = @(
        De = '                Paneles[id].Orden = n++;'; A = '                n++;' },
     @{ Nombre = "no descarta activos invalidos"
        De = "            if (!Enum.IsDefined(z) || !Paneles.TryGetValue(Activos[z], out var u) || u.Zona != z)`n                Activos.Remove(z);"
-       A  = "            if (!Enum.IsDefined(z))`n                Activos.Remove(z);" }
+       A  = "            if (!Enum.IsDefined(z))`n                Activos.Remove(z);" },
+
+    # ---- Auto-ocultar (3c) ----
+    @{ Nombre = "los auto-ocultos siguen ocupando su zona"
+       De = ' && p.Value.AutoOculto == autoOcultos)'; A = ')' },
+    @{ Nombre = "auto-ocultar el activo no pasa a la vecina"
+       De = "        if (u.Visible) SoltarActivo(u.Zona, id);`n        u.AutoOculto = true;"; A = "        u.AutoOculto = true;" },
+    @{ Nombre = "auto-ocultar un auto-oculto cerrado lo vuelve a mostrar"
+       De = 'out var u) || u.AutoOculto) return;'; A = 'out var u)) return;' },
+    @{ Nombre = "fijar no lo acopla"
+       De = "        u.AutoOculto = false;`n        u.Visible = true;`n        Activos[u.Zona] = id;"; A = "        u.Visible = true;`n        Activos[u.Zona] = id;" },
+    @{ Nombre = "fijar no lo deja activo"
+       De = "        u.AutoOculto = false;`n        u.Visible = true;`n        Activos[u.Zona] = id;"; A = "        u.AutoOculto = false;`n        u.Visible = true;" },
+    @{ Nombre = "ocultar pierde el auto-oculto"
+       De = "        u.Visible = false;`n    }"; A = "        u.AutoOculto = false;`n        u.Visible = false;`n    }" },
+    # NO VA "ocultar un auto-oculto le suelta el activo" (sacar el
+    # "&& !u.AutoOculto" de Ocultar): es un defecto EQUIVALENTE. SoltarActivo
+    # solo actua si el oculto es el activo anotado de la zona, y un auto-oculto
+    # no puede serlo (Activar, Mostrar y AutoOcultar lo impiden; verificado
+    # arriba). Sin la guarda el resultado es el mismo: ninguna prueba puede
+    # verlo (medido el 28/09: 0 fallas).
+    @{ Nombre = "mostrar un auto-oculto lo anota como activo"
+       De = '        if (!u.AutoOculto) Activos[u.Zona] = id;'; A = '        Activos[u.Zona] = id;' },
+    @{ Nombre = "mover no lo acopla"
+       De = "        u.AutoOculto = false;`n        Mostrar(id);"; A = "        Mostrar(id);" },
+    @{ Nombre = "activar anota un auto-oculto"
+       De = 'out var u) && !u.AutoOculto) Activos[u.Zona] = id;'; A = 'out var u)) Activos[u.Zona] = id;' }
 )
 
 $original = [IO.File]::ReadAllBytes($archivo)
@@ -46,7 +74,11 @@ try {
         $texto = [Text.Encoding]::UTF8.GetString($original)
         $de = $d.De; $a = $d.A
         if ($texto.Contains("`r`n")) { $de = $de.Replace("`n", "`r`n"); $a = $a.Replace("`n", "`r`n") }
-        if (-not $texto.Contains($de)) { throw "No encuentro el texto a romper para '$($d.Nombre)': el fuente cambio." }
+        # EXACTAMENTE una vez: Replace cambia todas, y un texto que aparece en
+        # otro metodo rompe algo distinto de lo que dice el nombre (paso con
+        # "mostrar no lo deja activo" al llegar Fijar, en la 3c).
+        $veces = ([regex]::Matches($texto, [regex]::Escape($de))).Count
+        if ($veces -ne 1) { throw "El texto a romper para '$($d.Nombre)' aparece $veces veces (tiene que ser 1): el fuente cambio." }
 
         [IO.File]::WriteAllText($archivo, $texto.Replace($de, $a), $utf8SinBom)
 
