@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using AsmEditor.Core;
 using AsmEditor.Core.Acople;
 
 namespace AsmEditor;
@@ -30,6 +31,13 @@ namespace AsmEditor;
 /// vuelve a su zona. Las flotantes se abren y se cierran en
 /// <see cref="Actualizar"/>, según el modelo, como todo lo demás.
 ///
+/// Acoplar arrastrando (3e): mientras una flotante se mueve (recién sacada o
+/// no) se ven las <see cref="GuiasAcople"/> — una en cada borde y un rombo en
+/// el centro de los documentos — y, con el ratón sobre una, la
+/// <see cref="VistaPreviaAcople"/> de dónde quedaría. Soltada sobre una guía
+/// se acopla en esa zona (como última pestaña, activa y con el foco); en
+/// otro lado, sigue flotando. La geometría es <see cref="GeometriaAcople"/>.
+///
 /// ⚠ EXCEPCIÓN A LA REGLA DEL DISEÑADOR ("Dock solo para cabecera y pie"): las
 /// zonas, los divisores, el centro y lo que va dentro de cada zona usan Dock.
 /// Un Splitter no funciona sin Dock, y las zonas tienen que redimensionarse con
@@ -57,6 +65,13 @@ public partial class AnfitrionAcople : UserControl
 
     /// <summary>Tamaño de una flotante que nunca se vio (ancho y alto de ventana).</summary>
     private static readonly Size TamanoFlotanteNuevo = new(300, 400);
+
+    // Las guías y la vista previa de acoplar arrastrando (3e). Son ventanas
+    // aparte (encima de todo, del editor), no controles del anfitrión: por
+    // eso se crean acá y no en el diseñador. Se muestran solo mientras se
+    // arrastra una flotante.
+    private readonly GuiasAcople _guias = new();
+    private readonly VistaPreviaAcople _vistaPrevia = new();
 
     /// <summary>El diseño cambió (se mostró, ocultó o activó un panel, o se movió un divisor).</summary>
     public event EventHandler? DisenoCambiado;
@@ -293,6 +308,8 @@ public partial class AnfitrionAcople : UserControl
             var f = new VentanaFlotante();
             f.CierrePedido += Flotante_CierrePedido;
             f.Movida += Flotante_Movida;
+            f.Moviendo += Flotante_Moviendo;
+            f.Soltada += Flotante_Soltada;
             f.Contener(v);
             f.Bounds = LimitesEnPantalla(id, duenio);
             _flotantes[id] = f;
@@ -460,10 +477,7 @@ public partial class AnfitrionAcople : UserControl
     {
         if (_desplegado is null || Diseno.ZonaDe(_desplegado) is not { } zona) return;
 
-        int izq = Diseno.AutoOcultosEn(ZonaAcople.Izquierda).Count > 0 ? bordeIzquierda.Width : 0;
-        int der = ClientSize.Width - (Diseno.AutoOcultosEn(ZonaAcople.Derecha).Count > 0 ? bordeDerecha.Width : 0);
-        int abajo = ClientSize.Height - (Diseno.AutoOcultosEn(ZonaAcople.Abajo).Count > 0 ? bordeAbajo.Height : 0);
-        var area = new Rectangle(izq, 0, Math.Max(0, der - izq), Math.Max(0, abajo));
+        var area = AreaDeZonas();
 
         pnlDesplegado.Bounds = zona switch
         {
@@ -475,6 +489,107 @@ public partial class AnfitrionAcople : UserControl
         static Rectangle AnchoDesde(Rectangle a, int ancho) => new(a.Right - ancho, a.Top, ancho, a.Height);
         static Rectangle AltoDesde(Rectangle a, int alto) => new(a.Left, a.Bottom - alto, a.Width, alto);
     }
+
+    /// <summary>
+    /// Donde viven las zonas (en coordenadas del anfitrión): todo menos las
+    /// franjas de los auto-ocultos. Se calcula con el modelo y no con Visible
+    /// de las franjas, que da false mientras la ventana todavía no se mostró.
+    /// </summary>
+    private Rectangle AreaDeZonas()
+    {
+        int izq = Diseno.AutoOcultosEn(ZonaAcople.Izquierda).Count > 0 ? bordeIzquierda.Width : 0;
+        int der = ClientSize.Width - (Diseno.AutoOcultosEn(ZonaAcople.Derecha).Count > 0 ? bordeDerecha.Width : 0);
+        int abajo = ClientSize.Height - (Diseno.AutoOcultosEn(ZonaAcople.Abajo).Count > 0 ? bordeAbajo.Height : 0);
+        return new Rectangle(izq, 0, Math.Max(0, der - izq), Math.Max(0, abajo));
+    }
+
+    // ------------------------------------------------------------------
+    // Acoplar arrastrando (3e)
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Una flotante se está moviendo: las guías sobre el editor, con la que
+    /// está bajo el ratón resaltada y la vista previa de dónde quedaría. Con
+    /// el editor minimizado no hay dónde acoplar: no se muestra nada.
+    /// </summary>
+    private void Flotante_Moviendo(object? sender, EventArgs e)
+    {
+        var duenio = FindForm();
+        if (duenio is null || !IsHandleCreated || duenio.WindowState == FormWindowState.Minimized) return;
+
+        var guias = GuiasEnPantalla();
+        var raton = Control.MousePosition;
+        var guia = GeometriaAcople.GuiaEn(raton.X, raton.Y, guias);
+
+        _guias.Mostrar(RectangleToScreen(ClientRectangle), guias, GeometriaAcople.CentroDelRombo(CentroEnPantalla(), LadoGuia()), guia, duenio);
+
+        if (guia is { } g) _vistaPrevia.Mostrar(ARectangulo(GeometriaAcople.VistaPrevia(g.Zona, Disposicion())), duenio);
+        else _vistaPrevia.Hide();
+    }
+
+    /// <summary>
+    /// Se soltó una flotante. Sobre una guía (y sin Esc): se acopla en esa
+    /// zona, como última pestaña, activa y con el foco. En otro lado, sigue
+    /// flotando donde quedó.
+    ///
+    /// La guía se vuelve a buscar con el ratón de AHORA, no con la última
+    /// resaltada: es lo que el usuario ve al soltar.
+    /// </summary>
+    private void Flotante_Soltada(object? sender, bool cancelado)
+    {
+        OcultarGuias();
+        if (cancelado || sender is not VentanaFlotante { Panel: { } v } || !IsHandleCreated) return;
+
+        var raton = Control.MousePosition;
+        if (GeometriaAcople.GuiaEn(raton.X, raton.Y, GuiasEnPantalla()) is not { } guia) return;
+
+        Diseno.Mover(v.Id, guia.Zona);
+        Actualizar();
+
+        // La flotante (la activa) se cerró: la ventana del editor vuelve a ser
+        // la activa y el foco va al panel, ya en su zona.
+        FindForm()?.Activate();
+        v.Enfocar();
+        Avisar();
+    }
+
+    private void OcultarGuias()
+    {
+        _guias.Hide();
+        _vistaPrevia.Hide();
+    }
+
+    /// <summary>Las seis guías, en pantalla, con el tamaño escalado a los ppp de la pantalla.</summary>
+    private IReadOnlyList<GuiaAcople> GuiasEnPantalla() =>
+        GeometriaAcople.Guias(APantalla(RectangleToScreen(ClientRectangle)), CentroEnPantalla(), LadoGuia());
+
+    /// <summary>Los documentos (el centro), en pantalla: donde va el rombo.</summary>
+    private ScreenRect CentroEnPantalla() => APantalla(pnlCentro.RectangleToScreen(pnlCentro.ClientRectangle));
+
+    private int LadoGuia() => LogicalToDeviceUnits(GeometriaAcople.LadoGuia);
+
+    /// <summary>
+    /// Las zonas como están ahora, en pantalla. El panel que se arrastra ya
+    /// es flotante: su zona, si quedó vacía, ya no ocupa lugar.
+    /// </summary>
+    private DisposicionZonas Disposicion() => new()
+    {
+        Area = APantalla(RectangleToScreen(AreaDeZonas())),
+        Izquierda = ZonaEnPantalla(ZonaAcople.Izquierda),
+        Derecha = ZonaEnPantalla(ZonaAcople.Derecha),
+        Abajo = ZonaEnPantalla(ZonaAcople.Abajo),
+        Divisor = divisorIzquierda.Width,
+        AnchoIzquierda = Diseno.TamanoDe(ZonaAcople.Izquierda, AnchoIzquierda),
+        AnchoDerecha = Diseno.TamanoDe(ZonaAcople.Derecha, AnchoDerecha),
+        AltoAbajo = Diseno.TamanoDe(ZonaAcople.Abajo, AltoAbajo)
+    };
+
+    private ScreenRect? ZonaEnPantalla(ZonaAcople z) =>
+        Diseno.ZonaVisible(z) ? APantalla(RectangleToScreen(ZonaDe(z).Bounds)) : null;
+
+    private static ScreenRect APantalla(Rectangle r) => new(r.X, r.Y, r.Width, r.Height);
+
+    private static Rectangle ARectangulo(ScreenRect r) => new(r.X, r.Y, r.Width, r.Height);
 
     // ------------------------------------------------------------------
     // Lo que hace el usuario
@@ -693,5 +808,7 @@ public partial class AnfitrionAcople : UserControl
         Tema.TemaCambiado -= AplicarTema;
         foreach (var f in _flotantes.Values.Where(f => !f.IsDisposed)) f.Cerrar();
         _flotantes.Clear();
+        _guias.Dispose();
+        _vistaPrevia.Dispose();
     }
 }

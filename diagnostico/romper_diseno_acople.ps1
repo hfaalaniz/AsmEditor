@@ -1,8 +1,11 @@
 # ============================================================================
-# Verifica que DisenoAcopleTests FALLA cuando se rompe el modelo del acople
-# (Core\Acople\DisenoAcople.cs).
+# Verifica que las pruebas del acople en Core FALLAN cuando se rompe:
+#   - el modelo (Core\Acople\DisenoAcople.cs) -> DisenoAcopleTests
+#   - la geometria de acoplar arrastrando, 3e (Core\Acople\GeometriaAcople.cs)
+#     -> GeometriaAcopleTests
+# Cada defecto dice su Archivo y su Filtro; sin decirlo, son los del modelo.
 #
-# Un defecto por vez; restaura el fuente byte por byte (finally).
+# Un defecto por vez; restaura cada fuente byte por byte (finally).
 #
 # Es para que lo lea yo, no forma parte de la interfaz.
 # ============================================================================
@@ -11,8 +14,12 @@ $ErrorActionPreference = "Stop"
 
 $raiz    = Split-Path $PSScriptRoot
 $pruebas = "$raiz\AsmEditor.Tests"
-$archivo = "$raiz\Core\Acople\DisenoAcople.cs"
 $utf8SinBom = New-Object System.Text.UTF8Encoding($false)
+
+$archivoModelo    = "Core\Acople\DisenoAcople.cs"
+$filtroModelo     = "DisenoAcopleTests"
+$archivoGeometria = "Core\Acople\GeometriaAcople.cs"
+$filtroGeometria  = "GeometriaAcopleTests"
 
 $defectos = @(
     @{ Nombre = "registrar pisa lo guardado"
@@ -85,14 +92,52 @@ $defectos = @(
     @{ Nombre = "no olvida limites imposibles"
        De = '                u.LimitesFlotante = null;'; A = '' },
     @{ Nombre = "flotante y auto-oculto a la vez"
-       De = '            if (u.Flotante) u.AutoOculto = false;'; A = '' }
+       De = '            if (u.Flotante) u.AutoOculto = false;'; A = '' },
+
+    # ---- Geometria de acoplar arrastrando (3e) ----
+    # NO VA "el rombo despues de los bordes" (invertir el orden de la lista):
+    # solo cambia cual gana si una flecha pisa una guia de borde, y con un
+    # editor de tamano normal no se pisan (Guias_NoSePisan). Es equivalente.
+    @{ Nombre = "la flecha izquierda del rombo va arriba"; Archivo = $archivoGeometria; Filtro = $filtroGeometria
+       De = 'new ScreenRect(c.X - separacion - lado, c.Y, lado, lado)'; A = 'new ScreenRect(c.X, c.Y - separacion - lado, lado, lado)' },
+    @{ Nombre = "el rombo sobre todo el anfitrion"; Archivo = $archivoGeometria; Filtro = $filtroGeometria
+       De = 'var c = CentroDelRombo(centro, lado);'; A = 'var c = CentroDelRombo(anfitrion, lado);' },
+    @{ Nombre = "la guia derecha sin margen"; Archivo = $archivoGeometria; Filtro = $filtroGeometria
+       De = 'anfitrion.Right - margen - lado, anfitrion.Y'; A = 'anfitrion.Right - lado, anfitrion.Y' },
+    @{ Nombre = "la guia de abajo no centrada"; Archivo = $archivoGeometria; Filtro = $filtroGeometria
+       De = 'anfitrion.X + anfitrion.Width / 2 - lado / 2, anfitrion.Bottom'; A = 'anfitrion.X, anfitrion.Bottom' },
+    @{ Nombre = "el margen no escala"; Archivo = $archivoGeometria; Filtro = $filtroGeometria
+       De = 'int margen = lado / 4;'; A = 'int margen = 8;' },
+    @{ Nombre = "la guia se come el pixel de la vecina"; Archivo = $archivoGeometria; Filtro = $filtroGeometria
+       De = 'x < g.Rect.Right'; A = 'x <= g.Rect.Right' },
+    @{ Nombre = "una zona ocupada no es su propia vista previa"; Archivo = $archivoGeometria; Filtro = $filtroGeometria
+       De = '        if (d.Ocupada(zona) is { } ocupada) return ocupada;'; A = '' },
+    @{ Nombre = "ocupada devuelve otra zona"; Archivo = $archivoGeometria; Filtro = $filtroGeometria
+       De = 'ZonaAcople.Derecha => Derecha,'; A = 'ZonaAcople.Derecha => Abajo,' },
+    @{ Nombre = "la izquierda vacia no toma todo el alto"; Archivo = $archivoGeometria; Filtro = $filtroGeometria
+       De = 'Math.Min(d.AnchoIzquierda, a.Width), a.Height);'; A = 'Math.Min(d.AnchoIzquierda, a.Width), a.Height - d.AltoAbajo);' },
+    @{ Nombre = "la derecha vacia no se recorta al area"; Archivo = $archivoGeometria; Filtro = $filtroGeometria
+       De = 'int ancho = Math.Min(d.AnchoDerecha, a.Width);'; A = 'int ancho = d.AnchoDerecha;' },
+    @{ Nombre = "abajo a todo el ancho aunque haya laterales"; Archivo = $archivoGeometria; Filtro = $filtroGeometria
+       De = 'int izquierda = d.Izquierda is { } i ? i.Right + d.Divisor : a.X;'; A = 'int izquierda = a.X;' },
+    @{ Nombre = "abajo sin descontar el divisor"; Archivo = $archivoGeometria; Filtro = $filtroGeometria
+       De = 'r.X - d.Divisor : a.Right;'; A = 'r.X : a.Right;' }
 )
 
-$original = [IO.File]::ReadAllBytes($archivo)
+$originales = @{}
+foreach ($d in $defectos) {
+    if (-not $d.Archivo) { $d.Archivo = $archivoModelo }
+    if (-not $d.Filtro) { $d.Filtro = $filtroModelo }
+    $f = "$raiz\$($d.Archivo)"
+    if (-not $originales.ContainsKey($f)) { $originales[$f] = [IO.File]::ReadAllBytes($f) }
+}
 $sinDetectar = 0
 
 try {
     foreach ($d in $defectos) {
+        $archivo = "$raiz\$($d.Archivo)"
+        $original = $originales[$archivo]
+
         # El fuente se lee con los finales de linea del disco; los defectos
         # de varias lineas se escriben con `n y se adaptan a CRLF si hace falta.
         $texto = [Text.Encoding]::UTF8.GetString($original)
@@ -107,7 +152,7 @@ try {
         [IO.File]::WriteAllText($archivo, $texto.Replace($de, $a), $utf8SinBom)
 
         $ErrorActionPreference = "Continue"
-        $salida = & dotnet test $pruebas --nologo --filter "FullyQualifiedName~DisenoAcopleTests" 2>&1 | Out-String
+        $salida = & dotnet test $pruebas --nologo --filter "FullyQualifiedName~$($d.Filtro)" 2>&1 | Out-String
         $ErrorActionPreference = "Stop"
 
         [IO.File]::WriteAllBytes($archivo, $original)
@@ -121,8 +166,8 @@ try {
     }
 }
 finally {
-    [IO.File]::WriteAllBytes($archivo, $original)
-    Write-Host "  (original restaurado)"
+    foreach ($f in $originales.Keys) { [IO.File]::WriteAllBytes($f, $originales[$f]) }
+    Write-Host "  (originales restaurados)"
 }
 
 if ($sinDetectar -eq 0) { Write-Host "=== TODOS LOS DEFECTOS DETECTADOS ===" -ForegroundColor Green; exit 0 }

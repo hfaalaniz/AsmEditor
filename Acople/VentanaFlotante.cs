@@ -20,6 +20,10 @@ namespace AsmEditor;
 /// ⚠ EL PANEL NO ES DE ESTA VENTANA: se cierra soltándolo antes
 /// (<see cref="Cerrar"/>), o se iría con ella al Dispose. Alt+F4 no cierra:
 /// avisa (<see cref="CierrePedido"/>) y el anfitrión lo oculta como la ✕.
+///
+/// Acoplar arrastrando (3e): mientras Windows la mueve avisa
+/// <see cref="Moviendo"/> (el anfitrión muestra las guías) y al soltarla
+/// <see cref="Soltada"/> (el anfitrión decide si se acopla).
 /// </summary>
 public partial class VentanaFlotante : Form
 {
@@ -28,6 +32,7 @@ public partial class VentanaFlotante : Form
     private const int WM_NCLBUTTONDOWN = 0x00A1;
     private const int WM_SIZING = 0x0214;
     private const int WM_MOVING = 0x0216;
+    private const int WM_ENTERSIZEMOVE = 0x0231;
     private const int WM_EXITSIZEMOVE = 0x0232;
     private const int HTCLIENT = 1;
     private const int HTCAPTION = 2;
@@ -38,11 +43,28 @@ public partial class VentanaFlotante : Form
     private bool _cerrandoDesdeAnfitrion;
     private bool _moviendo;
 
+    // El arrastre de ahora: si se movió (no solo cambió de tamaño) y dónde
+    // estaba al empezar, para reconocer el Esc.
+    private bool _arrastrada;
+    private Rectangle _alEmpezar;
+
     /// <summary>Alt+F4 (o el menú de sistema): el anfitrión la oculta como la ✕.</summary>
     public event EventHandler? CierrePedido;
 
     /// <summary>Terminó de moverse o de cambiar de tamaño: el anfitrión guarda dónde quedó.</summary>
     public event EventHandler? Movida;
+
+    /// <summary>Windows la está moviendo (el ratón manda: el anfitrión lo lee).</summary>
+    public event EventHandler? Moviendo;
+
+    /// <summary>
+    /// Se soltó después de moverla. True = se canceló con Esc (Windows la
+    /// devolvió a donde estaba): no hay que acoplarla aunque el ratón quede
+    /// sobre una guía. Llega ANTES que <see cref="Movida"/>, y si el
+    /// anfitrión la acopla, Movida ya no llega: el lugar donde se la soltó no
+    /// pisa el último lugar donde flotó.
+    /// </summary>
+    public event EventHandler<bool>? Soltada;
 
     public VentanaFlotante()
     {
@@ -149,17 +171,39 @@ public partial class VentanaFlotante : Form
                 if ((int)m.Result == HTCLIENT) m.Result = (IntPtr)BordeSuperiorEn(m.LParam);
                 return;
 
+            case WM_ENTERSIZEMOVE:
+                _alEmpezar = Bounds;
+                _arrastrada = false;
+                break;
+
             case WM_MOVING:
+                _moviendo = true;
+                _arrastrada = true;
+                Moviendo?.Invoke(this, EventArgs.Empty);
+                break;
+
             case WM_SIZING:
                 _moviendo = true;
                 break;
 
             case WM_EXITSIZEMOVE:
                 base.WndProc(ref m);
+
+                // ⚠ Esc: Windows la devuelve EXACTAMENTE a donde estaba al
+                // empezar. Un arrastre que vuelve solo al mismo píxel cuenta
+                // igual como cancelado; en la práctica no pasa.
+                if (_arrastrada)
+                {
+                    _arrastrada = false;
+                    Soltada?.Invoke(this, Bounds == _alEmpezar);
+                }
+
+                // Si el anfitrión la acopló al soltarla, ya soltó el panel y
+                // se cerró: no hay lugar que guardar.
                 if (_moviendo)
                 {
                     _moviendo = false;
-                    Movida?.Invoke(this, EventArgs.Empty);
+                    if (Panel is not null) Movida?.Invoke(this, EventArgs.Empty);
                 }
                 return;
         }

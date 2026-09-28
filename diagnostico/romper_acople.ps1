@@ -8,7 +8,8 @@
 #
 # -Solo "texto","otro": corre solo los defectos cuyo nombre contiene alguno
 # (para repetir unos pocos sin esperar los ~25 minutos de todos).
-# -Seccion "H.": solo los de esa seccion de acople.ps1.
+# -Seccion "H.": solo los de esa seccion de acople.ps1 (la I, acoplar
+# arrastrando, corre al final de acople.ps1 con su propio editor).
 #
 # Es para que lo lea yo, no forma parte de la interfaz.
 # ============================================================================
@@ -101,10 +102,41 @@ $defectos = @(
        De = 'movida.Left + enPantalla.X - v.PuntoApretado.X,'; A = 'movida.Left,' },
     @{ Nombre = "sacar arrastrando no la pone bajo el raton"; Seccion = "H."; Archivo = "Acople\AnfitrionAcople.cs"
        De = 'new Point(p.X - tamano.Width / 2, p.Y - 4 - 13)'; A = 'new Point(p.X - tamano.Width / 2, p.Y + 200)' },
+    # Desde la 3e las dos lineas estan tambien al acoplar arrastrando: se
+    # ancla con el comentario de la funcion que sigue a AcoplarPanel.
     @{ Nombre = "acoplar no le da el foco al panel"; Seccion = "H."; Archivo = "Acople\AnfitrionAcople.cs"
-       De = "        FindForm()?.Activate();`n        v.Enfocar();"; A = "        FindForm()?.Activate();" },
+       De = "        FindForm()?.Activate();`n        v.Enfocar();`n        Avisar();`n    }`n`n    /// <summary>Su ventana al frente"
+       A  = "        FindForm()?.Activate();`n        Avisar();`n    }`n`n    /// <summary>Su ventana al frente" },
     @{ Nombre = "cerrar el editor esconde el panel"; Seccion = "H."; Archivo = "Acople\VentanaFlotante.cs"
-       De = 'if (_cerrandoDesdeAnfitrion || e.CloseReason != CloseReason.UserClosing) return;'; A = 'if (_cerrandoDesdeAnfitrion) return;' }
+       De = 'if (_cerrandoDesdeAnfitrion || e.CloseReason != CloseReason.UserClosing) return;'; A = 'if (_cerrandoDesdeAnfitrion) return;' },
+
+    # ---- Acoplar arrastrando (3e) ----
+    # La geometria (donde van las guias, la vista previa) la cubren las
+    # pruebas unitarias: romper_diseno_acople.ps1. Aca, lo que la une a la
+    # interfaz.
+    # NO VA "el guardado de la flotante no mira si se acoplo" (sacar el
+    # "if (Panel is not null)" antes de Movida en VentanaFlotante): el
+    # anfitrion ya descarta una flotante sin panel en Flotante_Movida. Es
+    # equivalente; el orden (Soltada antes que Movida) si se rompe abajo.
+    @{ Nombre = "las guias no aparecen al arrastrar"; Seccion = "I."; Archivo = "Acople\AnfitrionAcople.cs"
+       De = '            f.Moviendo += Flotante_Moviendo;'; A = '' },
+    @{ Nombre = "sin vista previa"; Seccion = "I."; Archivo = "Acople\AnfitrionAcople.cs"
+       De = "        if (guia is { } g) _vistaPrevia.Mostrar(ARectangulo(GeometriaAcople.VistaPrevia(g.Zona, Disposicion())), duenio);`n        else _vistaPrevia.Hide();"
+       A  = "        _vistaPrevia.Hide();" },
+    @{ Nombre = "soltar sobre una guia no acopla"; Seccion = "I."; Archivo = "Acople\AnfitrionAcople.cs"
+       De = '        Diseno.Mover(v.Id, guia.Zona);'; A = '' },
+    @{ Nombre = "las guias quedan a la vista al soltar"; Seccion = "I."; Archivo = "Acople\AnfitrionAcople.cs"
+       De = "        _guias.Hide();`n"; A = "" },
+    @{ Nombre = "acoplar arrastrando no le da el foco al panel"; Seccion = "I."; Archivo = "Acople\AnfitrionAcople.cs"
+       De = "        v.Enfocar();`n        Avisar();`n    }`n`n    private void OcultarGuias()"
+       A  = "        Avisar();`n    }`n`n    private void OcultarGuias()" },
+    @{ Nombre = "Esc acopla igual"; Seccion = "I."; Archivo = "Acople\VentanaFlotante.cs"
+       De = 'Soltada?.Invoke(this, Bounds == _alEmpezar);'; A = 'Soltada?.Invoke(this, false);' },
+    # Guarda donde se la solto ANTES de acoplarla: pisa el ultimo lugar
+    # donde floto (I.5).
+    @{ Nombre = "acoplar arrastrando pisa el ultimo lugar flotante"; Seccion = "I."; Archivo = "Acople\VentanaFlotante.cs"
+       De = "                if (_arrastrada)`n                {`n                    _arrastrada = false;"
+       A  = "                if (_arrastrada)`n                {`n                    Movida?.Invoke(this, EventArgs.Empty);`n                    _arrastrada = false;" }
 )
 
 if ($Solo) { $defectos = @($defectos | Where-Object { $n = $_.Nombre; @($Solo | Where-Object { $n -like "*$_*" }).Count -gt 0 }) }

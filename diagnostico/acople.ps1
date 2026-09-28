@@ -1,6 +1,6 @@
 # ============================================================================
-# Prueba del ACOPLE por la interfaz (PLAN_IDE.md, Etapa 3: 3a zonas y 3b
-# pestanas por zona).
+# Prueba del ACOPLE por la interfaz (PLAN_IDE.md, Etapa 3: 3a zonas, 3b
+# pestanas por zona, 3c auto-ocultar, 3d flotar y 3e acoplar arrastrando).
 #
 #   A. Disposicion: el explorador a la DERECHA; la lista de errores y la
 #      salida ABAJO, como dos pestanas de la misma zona, con la lista activa.
@@ -25,6 +25,16 @@
 #      acoplado la saca bajo el raton; "Acoplar" del menu la devuelve; y
 #      cerrar el editor con una flotante: cancelar no pierde el panel, salir
 #      termina limpio.
+#   I. Acoplar arrastrando (3e), con un editor aislado NUEVO (H lo cerro):
+#      sacar el explorador arrastrando muestra las guias; sobre la guia del
+#      borde izquierdo, vista previa de la zona izquierda y al soltar queda
+#      ahi, con el foco; de ahi a la flecha de abajo del rombo, entra como
+#      pestana de la zona de abajo; soltado lejos de las guias sigue
+#      flotando; una flotante vieja a la flecha derecha se acopla a la
+#      derecha; volver a flotarla la pone donde flotaba (acoplar arrastrando
+#      no piso ese lugar); Esc a mitad del arrastre no acopla. Guarda
+#      acople_guia_izquierda.png y acople_guia_rombo.png (captura de
+#      pantalla, con las guias y la vista previa, que son otras ventanas).
 #
 # Editor AISLADO y teclas/clics PROTEGIDOS. Solo se leen textos de ventanas
 # DEL EDITOR (AC.Titulo lo exige). Guarda acople_*.png para mirarlas yo.
@@ -220,6 +230,60 @@ public static class AC {
         return true;
     }
 
+    // ---- Arrastre por pasos (seccion I): apretar, mover, mirar, soltar ----
+    [DllImport("user32.dll")] static extern bool GetCursorPos(out POINT p);
+    [DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint f, IntPtr e);
+    [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr h);
+
+    // Aprieta el boton izquierdo SOLO si el punto es de una ventana del
+    // proceso y el primer plano tambien.
+    public static bool Apretar(uint pid, int x, int y) {
+        POINT p; p.X = x; p.Y = y;
+        if (Pid(GetAncestor(WindowFromPoint(p), 2)) != pid) return false;
+        if (Pid(GetForegroundWindow()) != pid) return false;
+        SetCursorPos(x, y); System.Threading.Thread.Sleep(150);
+        mouse_event(0x02, 0, 0, 0, IntPtr.Zero); System.Threading.Thread.Sleep(120);
+        return true;
+    }
+
+    // Con el boton apretado, lleva el raton en pasos hasta el punto. SOLO si
+    // el primer plano es del proceso (mientras se arrastra, la flotante).
+    public static bool MoverApretado(uint pid, int x, int y) {
+        if (Pid(GetForegroundWindow()) != pid) return false;
+        POINT d; GetCursorPos(out d);
+        for (int i = 1; i <= 12; i++) {
+            SetCursorPos(d.X + (x - d.X) * i / 12, d.Y + (y - d.Y) * i / 12);
+            System.Threading.Thread.Sleep(30);
+        }
+        System.Threading.Thread.Sleep(250);
+        return true;
+    }
+
+    // Suelta el boton. Sin proteccion: se llama SIEMPRE despues de Apretar,
+    // para no dejar el boton apretado aunque algo haya fallado en el medio.
+    public static void Soltar() {
+        mouse_event(0x04, 0, 0, 0, IntPtr.Zero); System.Threading.Thread.Sleep(500);
+    }
+
+    // Esc SOLO si el primer plano es del proceso.
+    public static bool Esc(uint pid) {
+        if (Pid(GetForegroundWindow()) != pid) return false;
+        keybd_event(0x1B, 0, 0, IntPtr.Zero); keybd_event(0x1B, 0, 2, IntPtr.Zero);
+        System.Threading.Thread.Sleep(300);
+        return true;
+    }
+
+    // Captura de la PANTALLA en el rectangulo de la ventana (del editor, al
+    // frente): a diferencia de PrintWindow, sale lo que esta encima, como las
+    // guias y la vista previa, que son otras ventanas.
+    public static void CapturarPantalla(IntPtr h, string ruta) {
+        RECT r; GetWindowRect(h, out r);
+        using (var bmp = new Bitmap(r.Right - r.Left, r.Bottom - r.Top)) {
+            using (var g = Graphics.FromImage(bmp)) g.CopyFromScreen(r.Left, r.Top, 0, 0, bmp.Size);
+            bmp.Save(ruta, System.Drawing.Imaging.ImageFormat.Png);
+        }
+    }
+
     public static void Capturar(IntPtr h, string ruta) {
         RECT r; GetWindowRect(h, out r);
         using (var bmp = new Bitmap(r.Right - r.Left, r.Bottom - r.Top)) {
@@ -329,6 +393,67 @@ function PrimeraDelMenu($p, $ventana, $etiquetaTitulo) {
     if (-not (ClicProtegido $p ([int](($b[0].Left + $b[0].Right) / 2)) ([int](($b[0].Top + $b[0].Bottom) / 2)))) { return $false }
     Start-Sleep -Milliseconds 400
     return (TeclasProtegidas $p "{DOWN}{ENTER}" 800)
+}
+
+# ---- Seccion I: acoplar arrastrando ----
+
+# Las guias y la vista previa: ventanas del proceso con titulo fijo; Zero si
+# no se ven. El titulo de las guias lleva acento: se compara con comodin
+# (este archivo no tiene BOM y PowerShell 5 lo lee como ANSI).
+function Guias($p) { return (Buscar $p { param($h, $t) $t -like "Gu*as de acople" }) }
+function VistaPrevia($p) { return (Buscar $p { param($h, $t) $t -eq "Vista previa de acople" }) }
+
+# El medio de una guia, con la MISMA cuenta que Core\Acople\GeometriaAcople
+# (lado 32 a 96 ppp, margen lado/4, separacion lado/8), sobre la ventana de
+# las guias (= el anfitrion). Las del rombo, alrededor de $centroDocs (el
+# medio de los documentos, en pantalla).
+function PuntoGuia($guias, $centroDocs, $zona, $tipo) {
+    $a = [AC]::Rect($guias)
+    $lado = [int][Math]::Floor(32 * [AC]::GetDpiForWindow($guias) / 96)
+    $m = [int][Math]::Floor($lado / 4)
+    $s = [int][Math]::Floor($lado / 8)
+    $medio = [int][Math]::Floor($lado / 2)
+    if ($tipo -eq "Borde") {
+        switch ($zona) {
+            "Izquierda" { return @(($a.Left + $m + $medio), [int](($a.Top + $a.Bottom) / 2)) }
+            "Derecha"   { return @(($a.Right - $m - $lado + $medio), [int](($a.Top + $a.Bottom) / 2)) }
+            "Abajo"     { return @([int](($a.Left + $a.Right) / 2), ($a.Bottom - $m - $lado + $medio)) }
+        }
+    }
+    switch ($zona) {
+        "Izquierda" { return @(($centroDocs[0] - $lado - $s), $centroDocs[1]) }
+        "Derecha"   { return @(($centroDocs[0] + $lado + $s), $centroDocs[1]) }
+        "Abajo"     { return @($centroDocs[0], ($centroDocs[1] + $lado + $s)) }
+    }
+}
+
+# El medio de los documentos MIENTRAS se arrastra el explorador: flotando,
+# no hay zonas laterales (es el unico panel lateral), asi que los documentos
+# van de borde a borde, y hasta la zona de abajo (su titulo, menos el divisor
+# de 5 px).
+function CentroDocumentos($guias, $ide) {
+    $a = [AC]::Rect($guias)
+    $abajo = @(@(Etiquetas $ide "Lista de errores") + @(Etiquetas $ide "Salida") | ForEach-Object { ([AC]::Rect($_)).Top } | Sort-Object)
+    $fondo = if ($abajo.Count -gt 0) { $abajo[0] - 5 } else { $a.Bottom }
+    return @([int](($a.Left + $a.Right) / 2), [int](($a.Top + $fondo) / 2))
+}
+
+# Arrastra desde el titulo $desde: dos pasos para sacarlo/moverlo, despues
+# al punto $hacia, corre $mientras (con el boton apretado, para mirar las
+# guias) y suelta. Suelta SIEMPRE, aunque algo falle.
+function ArrastrarHasta($p, $desde, [scriptblock]$hacia, [scriptblock]$mientras) {
+    $id = [uint32]$p.Id
+    if (-not [AC]::Apretar($id, $desde[0], $desde[1])) { AvisoProteccion "el titulo no es del editor o no esta al frente: no se arrastra"; return $false }
+    try {
+        [void][AC]::MoverApretado($id, $desde[0] + 40, $desde[1] + 30)
+        [void][AC]::MoverApretado($id, $desde[0] + 90, $desde[1] + 70)
+        $destino = & $hacia
+        if ($destino) { [void][AC]::MoverApretado($id, $destino[0], $destino[1]) }
+        if ($mientras) { & $mientras }
+    } finally {
+        [AC]::Soltar()
+    }
+    return $true
 }
 
 # ---------------------------------------------------------------------------
@@ -754,6 +879,157 @@ try {
             if ($p.ExitCode -eq 0) { Bien "salir con la flotante abierta: el editor termino limpio (codigo 0)" } else { Mal "salir con la flotante abierta: codigo $($p.ExitCode)" }
         } else { Mal "salir con la flotante abierta: el editor NO termino (un error?)"; [AC]::Capturar($ide, (Join-Path $PSScriptRoot "acople_no_cerro.png")) }
     } else { Mal "no esta el explorador acoplado para probar el cierre" }
+
+    # -----------------------------------------------------------------------
+    # La seccion H termina cerrando el editor: la I abre otro aislado, que
+    # arranca con la disposicion de fabrica (explorador a la derecha; lista
+    # de errores y salida abajo; nada a la izquierda).
+    Titulo "I. Acoplar arrastrando"
+
+    CerrarEditorAislado
+    $exe = PrepararEditorAislado
+    $p = Start-Process $exe -PassThru
+    $ide = Esperar $p { param($h, $t) $t.EndsWith($finTituloIDE) }
+    if ($ide -eq [IntPtr]::Zero) { throw "no aparecio el IDE (seccion I)" }
+    Start-Sleep -Milliseconds 1500
+    if (-not (TraerAlFrente $p $ide)) { throw "no se pudo traer el IDE al frente (seccion I)" }
+    $rv = [AC]::Rect($ide)
+    $medio = ($rv.Left + $rv.Right) / 2
+    $medioY = ($rv.Top + $rv.Bottom) / 2
+
+    # I.1 Sacar el explorador arrastrando y soltarlo en la guia del borde
+    # IZQUIERDO (una zona vacia): aparecen las guias, sin guia bajo el raton
+    # no hay vista previa, sobre la guia la vista previa es la zona
+    # izquierda a todo el alto; al soltar queda ahi, con el foco.
+    $exp = Etiquetas $ide "Explorador"
+    if ($exp.Count -eq 1 -and (Centro $exp[0])[0] -gt $medio) {
+        $script:vistaSinGuia = $true; $script:guiasVistas = $false; $script:vistaIzq = $null; $script:anfitrion = $null
+        $hecho = ArrastrarHasta $p (Centro $exp[0]) {
+            $g = Guias $p
+            $script:guiasVistas = $g -ne [IntPtr]::Zero
+            $script:vistaSinGuia = (VistaPrevia $p) -eq [IntPtr]::Zero
+            if ($g -ne [IntPtr]::Zero) { $script:anfitrion = [AC]::Rect($g); return (PuntoGuia $g $null "Izquierda" "Borde") }
+        } {
+            $v = VistaPrevia $p
+            if ($v -ne [IntPtr]::Zero) { $script:vistaIzq = [AC]::Rect($v) }
+            [AC]::CapturarPantalla($ide, (Join-Path $PSScriptRoot "acople_guia_izquierda.png"))
+        }
+        if ($hecho) {
+            if ($script:guiasVistas) { Bien "al arrastrar el explorador aparecen las guias" } else { Mal "al arrastrar el explorador NO aparecen las guias" }
+            if ($script:vistaSinGuia) { Bien "sin guia bajo el raton, no hay vista previa" } else { Mal "hay vista previa sin guia bajo el raton" }
+            $a = $script:anfitrion; $r = $script:vistaIzq
+            Write-Host "    rastro vista previa izquierda: $(if ($r) { "($($r.Left),$($r.Top))-($($r.Right),$($r.Bottom))" } else { '-' })  anfitrion $(if ($a) { "($($a.Left),$($a.Top))-($($a.Right),$($a.Bottom))" } else { '-' })" -ForegroundColor DarkGray
+            if ($r -and $a -and [Math]::Abs($r.Left - $a.Left) -le 2 -and [Math]::Abs($r.Top - $a.Top) -le 2 -and [Math]::Abs($r.Bottom - $a.Bottom) -le 2 -and ($r.Right - $r.Left) -ge 100 -and ($r.Right - $r.Left) -le ($a.Right - $a.Left) / 2) { Bien "sobre la guia izquierda: la vista previa es la zona izquierda, a todo el alto" } else { Mal "sobre la guia izquierda: la vista previa no es la zona izquierda" }
+
+            $exp = Etiquetas $ide "Explorador"
+            if ((Flotante $p $ide "Explorador") -eq [IntPtr]::Zero -and $exp.Count -eq 1 -and (Centro $exp[0])[0] -lt $medio) { Bien "soltado en la guia izquierda: acoplado a la izquierda" } else { Mal "soltado en la guia izquierda: no se acoplo a la izquierda (flotante $((Flotante $p $ide 'Explorador') -ne [IntPtr]::Zero), etiquetas $($exp.Count))" }
+            if ((Guias $p) -eq [IntPtr]::Zero -and (VistaPrevia $p) -eq [IntPtr]::Zero) { Bien "al soltar, las guias y la vista previa desaparecen" } else { Mal "al soltar quedaron las guias o la vista previa" }
+            $foco = [AC]::Foco($ide)
+            Write-Host "    rastro foco tras acoplar arrastrando: $foco" -ForegroundColor DarkGray
+            if ($foco.StartsWith("SysTreeView32") -and $foco.EndsWith("[dentro del IDE]")) { Bien "acoplado arrastrando, el foco esta en el explorador" } else { Mal "acoplado arrastrando, el foco no esta en el explorador" }
+        } else { Mal "no se pudo arrastrar el explorador (I.1)" }
+    } else { Mal "no esta el explorador a la derecha para empezar la seccion I" }
+
+    # I.2 Del borde izquierdo a la flecha de ABAJO del rombo: la vista previa
+    # es la zona de abajo (ocupada: entra como pestana), y al soltar el
+    # explorador es una pestana mas ahi.
+    $exp = Etiquetas $ide "Explorador"
+    if ($exp.Count -eq 1) {
+        [void](TraerAlFrente $p $ide)
+        $script:vistaAbajo = $null; $script:zonaAbajoTop = $null; $script:anfitrion = $null
+        $hecho = ArrastrarHasta $p (Centro $exp[0]) {
+            $g = Guias $p
+            if ($g -ne [IntPtr]::Zero) {
+                $script:anfitrion = [AC]::Rect($g)
+                $script:zonaAbajoTop = (@(@(Etiquetas $ide "Lista de errores") + @(Etiquetas $ide "Salida") | ForEach-Object { ([AC]::Rect($_)).Top } | Sort-Object))[0]
+                return (PuntoGuia $g (CentroDocumentos $g $ide) "Abajo" "Rombo")
+            }
+        } {
+            $v = VistaPrevia $p
+            if ($v -ne [IntPtr]::Zero) { $script:vistaAbajo = [AC]::Rect($v) }
+            [AC]::CapturarPantalla($ide, (Join-Path $PSScriptRoot "acople_guia_rombo.png"))
+        }
+        if ($hecho) {
+            $a = $script:anfitrion; $r = $script:vistaAbajo
+            Write-Host "    rastro vista previa abajo: $(if ($r) { "($($r.Left),$($r.Top))-($($r.Right),$($r.Bottom))" } else { '-' })  titulo de la zona de abajo en y=$($script:zonaAbajoTop)" -ForegroundColor DarkGray
+            if ($r -and $a -and [Math]::Abs($r.Bottom - $a.Bottom) -le 2 -and [Math]::Abs($r.Top - $script:zonaAbajoTop) -le 10 -and [Math]::Abs($r.Left - $a.Left) -le 2 -and [Math]::Abs($r.Right - $a.Right) -le 2) { Bien "sobre la flecha de abajo del rombo: la vista previa es la zona de abajo" } else { Mal "sobre la flecha de abajo del rombo: la vista previa no es la zona de abajo" }
+
+            $exp = Etiquetas $ide "Explorador"
+            if ((Flotante $p $ide "Explorador") -eq [IntPtr]::Zero -and $exp.Count -eq 2 -and @($exp | Where-Object { (Centro $_)[1] -lt $medioY }).Count -eq 0 -and (Etiquetas $ide "Lista de errores").Count -eq 1) { Bien "soltado en el rombo: el explorador es una pestana mas de la zona de abajo, al frente" } else { Mal "soltado en el rombo: no quedo como pestana de abajo (etiquetas $($exp.Count))" }
+        } else { Mal "no se pudo arrastrar el explorador (I.2)" }
+    }
+
+    # I.3 Soltarlo LEJOS de las guias (un cuarto del editor, arriba a la
+    # izquierda): sigue flotando.
+    $exp = Etiquetas $ide "Explorador"
+    $flot = [IntPtr]::Zero
+    if ($exp.Count -ge 1) {
+        [void](TraerAlFrente $p $ide)
+        $lejos = @([int]($rv.Left + ($rv.Right - $rv.Left) / 4), [int]($rv.Top + ($rv.Bottom - $rv.Top) / 4))
+        $hecho = ArrastrarHasta $p (Centro $exp[0]) { $lejos } $null
+        if ($hecho) {
+            $flot = Flotante $p $ide "Explorador"
+            if ($flot -ne [IntPtr]::Zero -and (Etiquetas $ide "Explorador").Count -eq 0) { Bien "soltado lejos de las guias: sigue flotando" } else { Mal "soltado lejos de las guias: no quedo flotando" }
+            if ((Guias $p) -eq [IntPtr]::Zero) { Bien "y sin guias a la vista" } else { Mal "quedaron las guias a la vista" }
+        } else { Mal "no se pudo arrastrar el explorador (I.3)" }
+    }
+
+    # I.4 Una flotante que YA flotaba, arrastrada a la flecha DERECHA del
+    # rombo (zona vacia): la vista previa es la zona derecha a todo el alto,
+    # y al soltar se acopla a la derecha.
+    $antesDeAcoplar = $null
+    if ($flot -ne [IntPtr]::Zero) {
+        $antesDeAcoplar = [AC]::Rect($flot)
+        $script:vistaDer = $null; $script:anfitrion = $null
+        $hecho = ArrastrarHasta $p (Centro (@(Etiquetas $flot "Explorador"))[0]) {
+            $g = Guias $p
+            if ($g -ne [IntPtr]::Zero) { $script:anfitrion = [AC]::Rect($g); return (PuntoGuia $g (CentroDocumentos $g $ide) "Derecha" "Rombo") }
+        } {
+            $v = VistaPrevia $p
+            if ($v -ne [IntPtr]::Zero) { $script:vistaDer = [AC]::Rect($v) }
+        }
+        if ($hecho) {
+            $a = $script:anfitrion; $r = $script:vistaDer
+            if ($r -and $a -and [Math]::Abs($r.Right - $a.Right) -le 2 -and [Math]::Abs($r.Top - $a.Top) -le 2 -and [Math]::Abs($r.Bottom - $a.Bottom) -le 2 -and ($r.Right - $r.Left) -le ($a.Right - $a.Left) / 2) { Bien "sobre la flecha derecha del rombo: la vista previa es la zona derecha, a todo el alto" } else { Mal "sobre la flecha derecha del rombo: la vista previa no es la zona derecha" }
+            $exp = Etiquetas $ide "Explorador"
+            if ((Flotante $p $ide "Explorador") -eq [IntPtr]::Zero -and $exp.Count -eq 1 -and (Centro $exp[0])[0] -gt $medio) { Bien "una flotante vieja, soltada en la flecha derecha: acoplada a la derecha" } else { Mal "una flotante vieja, soltada en la flecha derecha: no se acoplo a la derecha" }
+        } else { Mal "no se pudo arrastrar la flotante (I.4)" }
+    } else { Mal "no hay flotante para arrastrar a una guia (I.4)" }
+
+    # I.5 Soltarla en una guia NO pisa el ultimo lugar donde floto: doble
+    # clic la vuelve a flotar donde estaba antes del arrastre de I.4.
+    $exp = Etiquetas $ide "Explorador"
+    $flot = [IntPtr]::Zero
+    if ($exp.Count -eq 1 -and $antesDeAcoplar) {
+        [void](TraerAlFrente $p $ide)
+        [void](Doble $p $exp[0])
+        $flot = Esperar $p { param($h, $t) $t -eq "Explorador" -and $h -ne $ide } 5
+        $r = if ($flot -ne [IntPtr]::Zero) { [AC]::Rect($flot) } else { $null }
+        Write-Host "    rastro: flotaba en ($($antesDeAcoplar.Left),$($antesDeAcoplar.Top)); vuelve en $(if ($r) { "($($r.Left),$($r.Top))" } else { '-' })" -ForegroundColor DarkGray
+        if ($r -and [Math]::Abs($r.Left - $antesDeAcoplar.Left) -le 2 -and [Math]::Abs($r.Top - $antesDeAcoplar.Top) -le 2) { Bien "vuelve a flotar donde flotaba (soltarla en una guia no piso ese lugar)" } else { Mal "no vuelve a flotar donde flotaba antes de acoplarla arrastrando" }
+    }
+
+    # I.6 Esc a mitad del arrastre, sobre la guia izquierda: Windows la
+    # devuelve a su lugar y NO se acopla.
+    if ($flot -ne [IntPtr]::Zero) {
+        $antes = [AC]::Rect($flot)
+        $script:vistaAntesDelEsc = $false
+        $hecho = ArrastrarHasta $p (Centro (@(Etiquetas $flot "Explorador"))[0]) {
+            $g = Guias $p
+            if ($g -ne [IntPtr]::Zero) { return (PuntoGuia $g $null "Izquierda" "Borde") }
+        } {
+            $script:vistaAntesDelEsc = (VistaPrevia $p) -ne [IntPtr]::Zero
+            if (-not [AC]::Esc([uint32]$p.Id)) { AvisoProteccion "el primer plano no es del editor: no se manda Esc" }
+        }
+        if ($hecho) {
+            $flot2 = Flotante $p $ide "Explorador"
+            $r = if ($flot2 -ne [IntPtr]::Zero) { [AC]::Rect($flot2) } else { $null }
+            Write-Host "    rastro Esc: vista previa antes del Esc $($script:vistaAntesDelEsc); estaba en ($($antes.Left),$($antes.Top)), queda en $(if ($r) { "($($r.Left),$($r.Top))" } else { '-' })" -ForegroundColor DarkGray
+            if ($script:vistaAntesDelEsc) { Bien "antes del Esc, la vista previa estaba (el raton sobre la guia)" } else { Mal "antes del Esc no habia vista previa: la prueba no llego a la guia" }
+            if ($r -and (Etiquetas $ide "Explorador").Count -eq 0 -and [Math]::Abs($r.Left - $antes.Left) -le 10 -and [Math]::Abs($r.Top - $antes.Top) -le 10) { Bien "Esc a mitad del arrastre: no se acopla, sigue flotando donde estaba" } else { Mal "Esc a mitad del arrastre: se acoplo o no volvio a su lugar" }
+            if ((Guias $p) -eq [IntPtr]::Zero -and (VistaPrevia $p) -eq [IntPtr]::Zero) { Bien "tras el Esc no quedan guias ni vista previa" } else { Mal "tras el Esc quedaron guias o vista previa" }
+        } else { Mal "no se pudo arrastrar la flotante (I.6)" }
+    } else { Mal "no hay flotante para probar el Esc (I.6)" }
 } finally {
     CerrarEditorAislado
 }

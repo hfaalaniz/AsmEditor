@@ -306,8 +306,24 @@ compartían la zona de abajo, y sin pestañas una quedaba inaccesible.
   **Enter cancelaba** (el foco arrancaba en «Cancelar», que le gana al
   `AcceptButton` «Salir»). Ahora el foco arranca en el botón por defecto.
   `diagnostico\dialogo_salida.ps1` (4/4), verificado quitando el arreglo.
-- [ ] **3e · Acoplar arrastrando:** guías de acople (rombo central y guías de
-  borde) con vista previa translúcida.
+- [x] **3e · Acoplar arrastrando** *(28/09)*: mientras se arrastra una
+  flotante (recién sacada o no) se ven las guías (`GuiasAcople`): una en el
+  medio de cada borde y un **rombo** con tres flechas en el centro de los
+  documentos. Con el ratón sobre una, la **vista previa** translúcida
+  (`VistaPreviaAcople`) muestra dónde quedaría; soltada ahí se acopla en esa
+  zona (última pestaña, activa, con el foco); en otro lado sigue flotando.
+  Geometría en `Core\Acople\GeometriaAcople.cs`, sin ventanas; el modelo no
+  cambió (`DisenoAcople.Mover`).
+  ⚠ Decisión de Fabián (opción A): rombo **y** guías de borde, como VS. Con
+  tres zonas las dos llevan al mismo lugar; es a propósito.
+  ⚠ La vista previa sale de la **disposición real**: una zona ocupada es esa
+  zona (entra como pestaña); una vacía, como la armaría el anfitrión (las
+  laterales a todo el alto, la de abajo entre las laterales visibles).
+  ⚠ **Esc** a mitad del arrastre no acopla: Windows devuelve la ventana a su
+  lugar exacto del `WM_ENTERSIZEMOVE`, y eso se reconoce.
+  ⚠ Soltarla en una guía **no pisa el último lugar donde flotó**:
+  `VentanaFlotante` avisa `Soltada` antes que `Movida`, y acoplada ya no
+  guarda.
 - [ ] **3f · Diseño persistente:** se guarda y se restaura; «Ventana →
   Restablecer diseño».
 - [ ] **3g · `MainForm` reescrito** sobre el anfitrión: el área central aloja
@@ -360,6 +376,7 @@ compartían la zona de abajo, y sin pestañas una quedaba inaccesible.
 | 23/09/2026 | 3a+3b | ver log | Acople en el editor: explorador a la derecha, Lista de errores · Salida abajo con pestañas, ✕ / Ver / Ctrl+B, divisores. 449 pruebas unitarias (18 del modelo, verificadas con `romper_diseno_acople.ps1`, 8 defectos). `acople.ps1` por interfaz, verificada con `romper_acople.ps1` (7 defectos). Corregido: el foco quedaba en la ✕ oculta y morían los atajos. Los 8 diagnósticos por interfaz en verde. |
 | 28/09/2026 | 3c | ver log | Auto-ocultar (chincheta). 459 pruebas unitarias; `romper_diseno_acople.ps1` 17/17 (5 no se detectaban: 4 pruebas corregidas o nuevas y 1 defecto equivalente, documentado). `acople.ps1` secciones F (explorador) y G (abajo), con capturas `acople_desplegado.png` y `acople_abajo_desplegado.png`; `romper_acople.ps1` 17/17 (7 viejos + 10 de la 3c; nuevo `-Solo` para repetir uno). El resguardo de foco de `Plegar` no es medible (WinForms ya devuelve el foco en el único camino que llega con foco): queda, documentado en `romper_acople.ps1`. |
 | 28/09/2026 | 3d | ver log | Flotar. 472 pruebas unitarias; `romper_diseno_acople.ps1` 27/27. `acople.ps1` sección H (flotar por doble clic, menú y arrastre; atajos reenviados; ✕ / Alt+F4 / Ctrl+B; acoplar; cerrar el editor con una flotante) y A–G en verde; `romper_acople.ps1 -Seccion H.` 11/11 (4 equivalentes medidos y documentados). Corregido en el camino: la flotante quedaba atrasada al arrastrarla. La prueba arrastraba la flotante FUERA de la pantalla y su ✕ no se alcanzaba: parecía un defecto del editor y era de la prueba. |
+| 28/09/2026 | 3e | ver log | Acoplar arrastrando (opción A: guías de borde + rombo). 487 pruebas unitarias (15 de `GeometriaAcopleTests`); `romper_diseno_acople.ps1` 39/39 (12 de geometría; ahora cada defecto dice su archivo y su filtro). Una prueba de la vista previa no veía su defecto (sus zonas ocupadas medían lo mismo que el cálculo de una vacía): corregida y vista fallar. `acople.ps1` 69/69, sección I nueva (16: guías, vista previa, borde izquierdo, rombo abajo y derecha, soltar afuera, flotante vieja, último lugar, Esc) con capturas `acople_guia_izquierda.png` y `acople_guia_rombo.png`; corre con un editor aislado nuevo porque H lo cierra. `romper_acople.ps1 -Seccion I.` 7/7 (1 equivalente documentado). |
 
 ### Pendientes detectados en la Etapa 2 (no tocados)
 
